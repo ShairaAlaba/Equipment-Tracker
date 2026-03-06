@@ -21,6 +21,7 @@
     @toggle-borrowers="toggleBorrowers"
     @add-borrower="addBorrower"
     @remove-borrower="removeBorrower"
+    @save-row="handleSaveRow"
   />
 
   <!-- History Tab -->
@@ -32,11 +33,13 @@
     @delete-record="handleDeleteRecord"
   />
 
+  <!-- Equipment Master Tab -->
+  <EquipmentMaster v-if="tab === 'equipment'" />
+
   <!-- Toast notification -->
   <Transition name="toast-fade">
     <div class="toast" v-if="toastMsg">{{ toastMsg }}</div>
   </Transition>
-   <EquipmentMaster />
 </template>
 
 <script setup>
@@ -63,6 +66,7 @@ const {
   recordDate,
   newEquipRows,
   oldEquipRows,
+  history,
   sortedHistory,
   loadHistory,
   addRow,
@@ -102,6 +106,45 @@ function handleLoadRecord(record) {
 function handleDeleteRecord(date) {
   deleteRecord(date)
   showToast('🗑 Record deleted')
+}
+
+/**
+ * Save a single equipment row to history and remove it from the daily record.
+ * Triggered when the user clicks "Save & Move to History" in the borrower card modal.
+ * section: 'new' | 'old'
+ * row: the equipment row object
+ */
+function handleSaveRow(section, row) {
+  // Build a history record snapshot with just this one row
+  const today = recordDate.value
+  const existing = history.value.find(r => r.date === today)
+
+  if (existing) {
+    // Append row to the matching day's section
+    if (section === 'new') {
+      existing.newEquipRows = [...(existing.newEquipRows || []), JSON.parse(JSON.stringify(row))]
+    } else {
+      existing.oldEquipRows = [...(existing.oldEquipRows || []), JSON.parse(JSON.stringify(row))]
+    }
+  } else {
+    // Create a new history entry for today with just this row
+    history.value.push({
+      date: today,
+      savedAt: new Date().toISOString(),
+      newEquipRows: section === 'new' ? [JSON.parse(JSON.stringify(row))] : [],
+      oldEquipRows: section === 'old' ? [JSON.parse(JSON.stringify(row))] : [],
+    })
+  }
+  // Persist to localStorage
+  localStorage.setItem('eqt_history', JSON.stringify(history.value))
+
+  // Remove the row from the active daily record
+  removeRow(section, section === 'new'
+    ? newEquipRows.value.findIndex(r => r.id === row.id)
+    : oldEquipRows.value.findIndex(r => r.id === row.id)
+  )
+
+  showToast('✅ Row saved to History for ' + today)
 }
 
 // ---- Init ----

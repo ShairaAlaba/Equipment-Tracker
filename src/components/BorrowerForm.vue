@@ -1,7 +1,5 @@
 <template>
-  <!-- BorrowerForm.vue — for NEW equipment section
-       Control No. lives here (after Assigned Project), not in the equipment row.
-  -->
+  <!-- BorrowerForm.vue — for NEW equipment section -->
   <tr class="borrower-panel-row">
     <td :colspan="11">
       <div class="borrower-panel panel-new">
@@ -27,35 +25,23 @@
                 <th class="group-header" style="min-width:96px">Return Time</th>
                 <th class="group-header" style="min-width:120px">Condition Upon Return</th>
                 <th class="group-header" style="min-width:150px">Return Damage Notes</th>
+                <th class="action-th" style="min-width:140px">Actions</th>
                 <th style="width:36px">Del</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(b, bi) in row.borrowers" :key="b.id">
+              <tr
+                v-for="(b, bi) in row.borrowers"
+                :key="b.id"
+                :class="{ 'row-returned': b.returned }"
+              >
                 <td class="row-num">{{ bi + 1 }}</td>
+                <td><input type="text" v-model="b.name" placeholder="Full name" /></td>
+                <td><input type="text" v-model="b.project" placeholder="Project" /></td>
+                <td><input type="text" v-model="b.controlNo" placeholder="CTRL-0001" class="ctrl-input" /></td>
 
-                <td>
-                  <input type="text" v-model="b.name" placeholder="Full name" />
-                </td>
-
-                <td>
-                  <input type="text" v-model="b.project" placeholder="Project" />
-                </td>
-
-                <!-- Control No. per borrower entry -->
-                <td>
-                  <input type="text" v-model="b.controlNo" placeholder="CTRL-0001" class="ctrl-input" />
-                </td>
-
-                <!-- Withdraw qty -->
                 <td class="wd-cell">
-                  <input
-                    type="number"
-                    min="0"
-                    v-model.number="b.withdraw"
-                    placeholder="0"
-                    class="wd-input"
-                  />
+                  <input type="number" min="0" v-model.number="b.withdraw" placeholder="0" class="wd-input" />
                 </td>
 
                 <td>
@@ -74,8 +60,16 @@
 
                 <td><input type="date" v-model="b.dateBorrowed" /></td>
                 <td><input type="time" v-model="b.timeBorrowed" /></td>
-                <td><input type="date" v-model="b.returnDate" /></td>
-                <td><input type="time" v-model="b.returnTime" /></td>
+
+                <!-- Return Date — highlighted green after Returned clicked -->
+                <td :class="{ 'returned-cell': b.returned }">
+                  <input type="date" v-model="b.returnDate" />
+                  <span v-if="b.returned" class="returned-tag">✓ Returned</span>
+                </td>
+
+                <td :class="{ 'returned-cell': b.returned }">
+                  <input type="time" v-model="b.returnTime" />
+                </td>
 
                 <td>
                   <select v-model="b.conditionReturn" :class="'condition-' + b.conditionReturn">
@@ -89,6 +83,28 @@
 
                 <td>
                   <textarea v-model="b.conditionReturnNotes" placeholder="Damage notes upon return..." rows="2" />
+                </td>
+
+                <!-- ── ACTIONS column ── -->
+                <td class="action-cell">
+                  <!-- RETURNED button -->
+                  <button
+                    class="action-btn btn-returned"
+                    :class="{ 'btn-returned--done': b.returned }"
+                    @click="markReturned(b)"
+                    :title="b.returned ? 'Already marked returned' : 'Mark as Returned — auto-fills return date & time'"
+                  >
+                    {{ b.returned ? '✓ Returned' : '↩ Return' }}
+                  </button>
+
+                  <!-- VIEW button -->
+                  <button
+                    class="action-btn btn-view"
+                    @click="openCard(b)"
+                    title="View & print borrower card"
+                  >
+                    👁 View Card
+                  </button>
                 </td>
 
                 <td>
@@ -113,6 +129,10 @@
               {{ available <= 0 ? 'No Equipment Available' : available }}
             </strong>
           </span>
+          <span v-if="returnedCount > 0" class="inv-sep">·</span>
+          <span v-if="returnedCount > 0" class="inv-chip">
+            <strong class="chip-returned">{{ returnedCount }} returned</strong>
+          </span>
         </div>
 
         <button class="add-borrower-btn add-borrower-new" @click="$emit('add-borrower', row)">
@@ -122,30 +142,78 @@
       </div>
     </td>
   </tr>
+
+  <!-- ══════════════════════════════════════
+       BORROWER CARD MODAL
+  ══════════════════════════════════════ -->
+  <BorrowerCardModal
+    v-if="viewingBorrower"
+    :borrower="viewingBorrower"
+    :row="row"
+    :record-date="recordDate"
+    @close="viewingBorrower = null"
+    @save-row="handleSaveRow"
+  />
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
+import BorrowerCardModal from './BorrowerCardModal.vue'
 
 const props = defineProps({
-  row:     { type: Object, required: true },
-  section: { type: String, default: 'new' }
+  row:        { type: Object, required: true },
+  section:    { type: String, default: 'new' },
+  recordDate: { type: String, default: '' }
 })
 
-defineEmits(['add-borrower', 'remove-borrower'])
+const emit = defineEmits(['add-borrower', 'remove-borrower', 'save-row'])
+
+// ── Card modal state ──
+const viewingBorrower = ref(null)
+
+function openCard(b) {
+  viewingBorrower.value = b
+}
+
+// ── Mark Returned: auto-fill date + time, free up availability ──
+function markReturned(b) {
+  const now = new Date()
+  const dateStr = now.toISOString().slice(0, 10)
+  const timeStr = now.toTimeString().slice(0, 5)   // HH:MM
+  b.returnDate = dateStr
+  b.returnTime = timeStr
+  b.returned   = true   // flag used to style the row and reduce withdrawn count
+}
+
+// ── Pass save-row up to App.vue ──
+function handleSaveRow() {
+  viewingBorrower.value = null
+  emit('save-row', props.row)
+}
+
+// ── Computed inventory ──
+// Only count borrowers who have NOT been returned yet
+const activeWithdrawn = computed(() =>
+  (props.row.borrowers || [])
+    .filter(b => !b.returned)
+    .reduce((sum, b) => sum + (parseInt(b.withdraw) || 0), 0)
+)
 
 const totalWithdrawn = computed(() =>
   (props.row.borrowers || []).reduce((sum, b) => sum + (parseInt(b.withdraw) || 0), 0)
 )
 
 const available = computed(() =>
-  (parseInt(props.row.totalQty) || 0) - totalWithdrawn.value
+  (parseInt(props.row.totalQty) || 0) - activeWithdrawn.value
+)
+
+const returnedCount = computed(() =>
+  (props.row.borrowers || []).filter(b => b.returned).length
 )
 </script>
 
 <style scoped>
 .borrower-panel-row td { padding: 0; }
-
 .borrower-panel { padding: 12px 16px 14px; }
 
 .panel-new {
@@ -174,7 +242,7 @@ const available = computed(() =>
   width: 100%;
   border-collapse: collapse;
   font-size: 12px;
-  min-width: 1500px;
+  min-width: 1700px;
 }
 
 .borrower-table thead th {
@@ -201,12 +269,33 @@ const available = computed(() =>
   border-left: 1px solid var(--border);
 }
 
+.action-th {
+  background: #eef4fb !important;
+  color: #2a5090 !important;
+  border-left: 2px solid rgba(42,80,144,0.25) !important;
+  text-align: center !important;
+}
+
 .borrower-table tbody tr {
   border-bottom: 1px solid #ede5da;
   transition: background 0.15s;
 }
 .borrower-table tbody tr:hover { background: #fdf8f3; }
 .borrower-table tbody td { padding: 7px 9px; vertical-align: top; }
+
+/* Returned row styling */
+.row-returned { background: rgba(42,122,34,0.04) !important; }
+.returned-cell { background: rgba(42,122,34,0.07) !important; position: relative; }
+.returned-tag {
+  display: block;
+  font-family: 'Nunito', sans-serif;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #2a7a22;
+  margin-top: 3px;
+}
 
 .row-num {
   font-family: 'DM Mono', monospace;
@@ -238,7 +327,54 @@ const available = computed(() =>
   padding: 4px 6px;
 }
 
-/* Live summary */
+/* ── Action buttons ── */
+.action-cell {
+  vertical-align: middle !important;
+  text-align: center;
+  border-left: 2px solid rgba(42,80,144,0.15);
+  background: rgba(238,244,251,0.4);
+}
+
+.action-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 5px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1.5px solid;
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.18s;
+  white-space: nowrap;
+  text-align: center;
+}
+.action-btn:last-child { margin-bottom: 0; }
+
+.btn-returned {
+  background: rgba(42,122,34,0.07);
+  border-color: rgba(42,122,34,0.3);
+  color: #2a7a22;
+}
+.btn-returned:hover { background: rgba(42,122,34,0.14); border-color: #2a7a22; }
+.btn-returned--done {
+  background: rgba(42,122,34,0.12);
+  border-color: #2a7a22;
+  color: #2a7a22;
+  opacity: 0.7;
+  cursor: default;
+}
+
+.btn-view {
+  background: rgba(42,96,153,0.07);
+  border-color: rgba(42,96,153,0.3);
+  color: #2a6099;
+}
+.btn-view:hover { background: rgba(42,96,153,0.14); border-color: #2a6099; }
+
+/* ── Live summary ── */
 .inv-summary {
   display: flex;
   align-items: center;
@@ -255,9 +391,10 @@ const available = computed(() =>
 }
 .inv-chip { display: flex; align-items: center; gap: 5px; }
 .inv-chip strong { font-family: 'DM Mono', monospace; font-size: 14px; color: #000000; }
-.chip-blue  { color: #2a6099 !important; }
-.chip-green { color: #2a7a22 !important; }
-.chip-red   { color: var(--danger) !important; font-size: 11px; }
+.chip-blue     { color: #2a6099 !important; }
+.chip-green    { color: #2a7a22 !important; }
+.chip-red      { color: var(--danger) !important; font-size: 11px; }
+.chip-returned { color: #2a7a22 !important; font-size: 12px; }
 .inv-sep { color: var(--border); font-size: 18px; font-weight: 300; line-height: 1; }
 
 .del-btn {

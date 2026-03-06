@@ -76,12 +76,14 @@
         section="new"
         section-label="New / Good Condition Equipment"
         section-code="SECTION A"
+        :record-date="recordDate"
         @add-row="$emit('add-row', 'new')"
         @add-picked-row="(data) => $emit('add-picked-row', data)"
         @remove-row="(i) => $emit('remove-row', 'new', i)"
         @toggle-borrowers="(row) => $emit('toggle-borrowers', row)"
         @add-borrower="(row) => $emit('add-borrower', row)"
         @remove-borrower="(row, i) => $emit('remove-borrower', row, i)"
+        @save-row="(row) => $emit('save-row', 'new', row)"
       />
 
       <!-- Section B — Old / Damaged (only shown when activeSection === 'old') -->
@@ -91,11 +93,13 @@
         section="old"
         section-label="Old / Damaged Equipment"
         section-code="SECTION B"
+        :record-date="recordDate"
         @add-row="$emit('add-row', 'old')"
         @remove-row="(i) => $emit('remove-row', 'old', i)"
         @toggle-borrowers="(row) => $emit('toggle-borrowers', row)"
         @add-borrower="(row) => $emit('add-borrower', row)"
         @remove-borrower="(row, i) => $emit('remove-borrower', row, i)"
+        @save-row="(row) => $emit('save-row', 'old', row)"
       />
 
     </div>
@@ -134,7 +138,8 @@ defineEmits([
   'remove-row',
   'toggle-borrowers',
   'add-borrower',
-  'remove-borrower'
+  'remove-borrower',
+  'save-row'
 ])
 
 const activeSection = ref('new')
