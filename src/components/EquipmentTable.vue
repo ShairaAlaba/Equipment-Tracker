@@ -10,6 +10,62 @@
       <span class="section-code">{{ sectionCode }}</span>
     </div>
 
+    <!-- ══════════════════════════════════════════════════════
+         LIVE EQUIPMENT AVAILABILITY PANEL  (new section only)
+    ═══════════════════════════════════════════════════════ -->
+    <div v-if="section === 'new'" class="avail-panel">
+
+      <!-- Panel header bar -->
+      <div class="avail-panel-header">
+        <span class="avail-panel-icon">📦</span>
+        <span class="avail-panel-title">Equipment Availability</span>
+        <span class="avail-panel-sub">Live · updates when borrowers withdraw or return</span>
+        <span class="avail-legend">
+          <span class="legend-pip legend-pip--green"></span>Available
+          <span class="legend-pip legend-pip--red" style="margin-left:12px"></span>Fully Out
+        </span>
+      </div>
+
+      <!-- Card grid — one card per master-list item -->
+      <div class="avail-grid">
+        <template v-if="equipmentList.length > 0">
+          <div
+            v-for="eq in equipmentList"
+            :key="eq.id"
+            class="avail-card"
+            :class="masterAvail(eq) > 0 ? 'avail-card--ok' : 'avail-card--out'"
+          >
+            <!-- Status dot -->
+            <span
+              class="avail-dot"
+              :class="masterAvail(eq) > 0 ? 'avail-dot--green' : 'avail-dot--red'"
+            ></span>
+
+            <!-- Name + codes -->
+            <div class="avail-info">
+              <div class="avail-name">{{ eq.name }}</div>
+              <div class="avail-codes">{{ (eq.codes || []).join(' · ') }}</div>
+            </div>
+
+            <!-- Qty block -->
+            <div class="avail-qty">
+              <span
+                class="avail-num"
+                :class="masterAvail(eq) > 0 ? 'avail-num--ok' : 'avail-num--out'"
+              >{{ masterAvail(eq) }}</span>
+              <span class="avail-total">/ {{ eq.qty }}</span>
+              <span class="avail-lbl">{{ masterAvail(eq) > 0 ? 'avail.' : 'none' }}</span>
+            </div>
+          </div>
+        </template>
+
+        <div v-else class="avail-empty">
+          No equipment in the master list yet — add items in the
+          <strong>Equipment Master</strong> tab and they'll appear here automatically.
+        </div>
+      </div>
+    </div>
+
     <!-- NEW EQUIPMENT TABLE -->
     <div v-if="section === 'new'" class="table-wrap wrap-new">
       <table class="new-section">
@@ -242,6 +298,7 @@
 <script setup>
 import BorrowerForm    from './BorrowerForm.vue'
 import BorrowerFormOld from './BorrowerFormOld.vue'
+import { inject, ref } from 'vue'
 import { useEquipmentStore } from '../composables/useEquipmentStore.js'
 
 const props = defineProps({
@@ -254,7 +311,28 @@ const props = defineProps({
 
 defineEmits(['add-row', 'remove-row', 'add-borrower', 'remove-borrower', 'toggle-borrowers', 'save-row'])
 
-const { findByCode } = useEquipmentStore()
+// ── Equipment master list (reactive — auto-updates when master list changes) ──
+const { equipmentList, findByCode } = useEquipmentStore()
+
+// ── All borrow rows (new + old) injected from parent App so the
+//    availability panel can see every live withdrawal across the whole app.
+//    Parent must:  provide('allEquipRows', computed(() => [...newRows, ...oldRows]))
+const allEquipRows = inject('allEquipRows', ref([]))
+
+/**
+ * How many units of `eq` are still available right now.
+ * Counts every borrower across ALL rows that hasn't returned yet.
+ */
+function masterAvail(eq) {
+  const borrowed = allEquipRows.value
+    .filter(r => r.toolName && r.toolName === eq.name)
+    .reduce((sum, r) => {
+      return sum + (r.borrowers || [])
+        .filter(b => !b.returned)
+        .reduce((s, b) => s + (parseInt(b.withdraw) || 0), 0)
+    }, 0)
+  return Math.max(0, eq.qty - borrowed)
+}
 
 // ─────────────────────────────────────────────────────────────
 // CODE INPUT — with duplicate + out-of-stock validation
@@ -337,6 +415,196 @@ function fleetAvailable(row) {
 </script>
 
 <style scoped>
+
+/* ════════════════════════════════════════════════════════════
+   LIVE EQUIPMENT AVAILABILITY PANEL
+════════════════════════════════════════════════════════════ */
+
+.avail-panel {
+  margin-bottom: 18px;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fdfaf6;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+}
+
+/* ── Header bar ── */
+.avail-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 18px 10px;
+  background: #3b2f20;
+  flex-wrap: wrap;
+}
+
+.avail-panel-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.avail-panel-title {
+  font-family: 'Nunito', sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: #f5ece0;
+}
+
+.avail-panel-sub {
+  flex: 1;
+  font-family: 'Nunito', sans-serif;
+  font-size: 10px;
+  color: rgba(245,236,224,0.55);
+}
+
+.avail-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgba(245,236,224,0.7);
+  letter-spacing: 0.4px;
+}
+
+.legend-pip {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.legend-pip--green { background: #4caf50; box-shadow: 0 0 5px rgba(76,175,80,0.7); }
+.legend-pip--red   { background: #e53935; box-shadow: 0 0 5px rgba(229,57,53,0.65); }
+
+/* ── Card grid ── */
+.avail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+  padding: 14px 16px 16px;
+}
+
+/* ── Individual card ── */
+.avail-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  border-radius: 10px;
+  border: 1.5px solid;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.avail-card--ok {
+  background: rgba(42,122,34,0.04);
+  border-color: rgba(42,122,34,0.22);
+}
+.avail-card--ok:hover { background: rgba(42,122,34,0.09); }
+
+.avail-card--out {
+  background: rgba(184,50,50,0.04);
+  border-color: rgba(184,50,50,0.22);
+}
+.avail-card--out:hover { background: rgba(184,50,50,0.08); }
+
+/* ── Status dot ── */
+.avail-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.25s, box-shadow 0.25s;
+}
+.avail-dot--green {
+  background: #4caf50;
+  box-shadow: 0 0 8px rgba(76,175,80,0.75);
+}
+.avail-dot--red {
+  background: #e53935;
+  box-shadow: 0 0 8px rgba(229,57,53,0.7);
+}
+
+/* ── Equipment name / codes ── */
+.avail-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.avail-name {
+  font-family: 'Nunito', sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  color: #1a1209;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.avail-codes {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--muted);
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Qty block ── */
+.avail-qty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 38px;
+}
+
+.avail-num {
+  font-family: 'DM Mono', monospace;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  transition: color 0.25s;
+}
+.avail-num--ok  { color: #2a7a22; }
+.avail-num--out { color: #b83232; }
+
+.avail-total {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+
+.avail-lbl {
+  font-family: 'Nunito', sans-serif;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+/* ── Empty state ── */
+.avail-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 22px 16px;
+  color: var(--muted);
+  font-family: 'Nunito', sans-serif;
+  font-size: 12px;
+  font-style: italic;
+}
+
 .section-block { margin-bottom: 44px; }
 
 .section-header {
@@ -401,20 +669,20 @@ thead th {
   position: sticky;
   top: 0;
   z-index: 2;
-  background: var(--surface2);
-  color: #000000;
+  background: #3b2f20;
+  color: #ffffff;
   border-bottom: 2px solid var(--border);
 }
 
 .new-section thead th.inv-group {
-  background: #f0e8dc;
-  color: var(--accent);
+  background: #3b2f20;
+  color: #ffffff;
   border-left: 1px solid var(--border);
 }
 .new-section thead th.inv-group:first-of-type {
-  border-left: 2px solid rgba(138,106,74,0.4);
+  border-left: 2px solid rgb(255, 255, 255);
 }
-.old-section thead th { background: #fff8f4; border-bottom-color: #e8cfc0; }
+.old-section thead th { background: #3b2f20; border-bottom-color: #e8cfc0; }
 
 tbody tr { border-bottom: 1px solid #ede5da; transition: background 0.15s; }
 tbody tr.equip-row:hover { background: #fdf8f3; }

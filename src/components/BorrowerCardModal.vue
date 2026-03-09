@@ -211,12 +211,15 @@ function printCard() {
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Nunito',sans-serif;font-size:11.5px;color:#000;background:#fff;padding:18mm 20mm}
+body{font-family:'Nunito',sans-serif;font-size:11.5px;color:#000;background:#fff;padding:0;margin:0}
 @page{size:A4 portrait;margin:0}
 
-/* Header image */
-.header-img{width:100%;max-height:90px;object-fit:contain;object-position:left center;margin-bottom:0}
-.header-divider{border:none;border-top:2.5px solid #000;margin:6px 0 10px}
+/* Header image — full bleed, no margin */
+.header-img{width:100%;height:auto;max-height:none;object-fit:fill;display:block;margin:0;padding:0}
+.header-divider{border:none;border-top:2.5px solid #000;margin:0}
+
+/* Content wrapper with proper page margins */
+.content-wrap{padding:8mm 20mm 18mm}
 
 /* Title */
 .card-title{text-align:center;font-size:15px;font-weight:800;letter-spacing:2.5px;text-transform:uppercase;margin:0 0 14px;padding-bottom:10px;border-bottom:1.5px solid #888}
@@ -262,6 +265,7 @@ body{font-family:'Nunito',sans-serif;font-size:11.5px;color:#000;background:#fff
 <img src="${HEAD_IMG}" class="header-img" alt="Caraga State University — General Services Office"/>
 <hr class="header-divider"/>
 
+<div class="content-wrap">
 <div class="card-title">POWER TOOLS BORROWED INFORMATION</div>
 
 <div class="two-col">
@@ -325,6 +329,8 @@ body{font-family:'Nunito',sans-serif;font-size:11.5px;color:#000;background:#fff
   <span>General Services Office — Equipment Borrow Tracker</span>
   <span>Printed: ${now}</span>
 </div>
+
+</div><!-- /content-wrap -->
 
 <script>window.onload = () => window.print();<\/script>
 </body></html>`
@@ -395,16 +401,16 @@ body{font-family:'Nunito',sans-serif;font-size:11.5px;color:#000;background:#fff
 
 /* Official header */
 .card-header-official {
-  margin-bottom: 0;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #000;
+  margin: -24px -32px 0;
+  padding: 0;
+  border-bottom: 2.5px solid #000;
 }
 
 .official-header-img {
   width: 100%;
-  max-height: auto !important;
-  object-fit: contain;
-  object-position: left center;
+  height: auto;
+  max-height: none;
+  object-fit: fill;
   display: block;
 }
 

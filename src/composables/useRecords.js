@@ -12,6 +12,7 @@ const uid = () => ++_uid
 export function makeRow() {
   return {
     id: uid(),
+    codeNo: '',        // code number typed in the table
     qty: '',
     toolName: '',
     controlNo: '',
@@ -34,9 +35,11 @@ export function makeBorrower() {
     conditionCheckout: '',
     conditionCheckoutNotes: '',
     // Withdrawal
+    withdraw: 0,       // qty withdrawn (number)
     dateBorrowed: '',
     timeBorrowed: '',
     // Return
+    returned: false,   // true once the borrower has returned the item
     returnDate: '',
     returnTime: '',
     // Condition upon return

@@ -43,7 +43,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, provide, onMounted } from 'vue'
 
 // Components
 import AppHeader   from './components/AppHeader.vue'
@@ -80,6 +80,12 @@ const {
   deleteRecord,
   totalBorrowers
 } = useRecords()
+
+// Provide all borrow rows to child components (EquipmentTable availability panel)
+provide('allEquipRows', computed(() => [
+  ...newEquipRows.value,
+  ...oldEquipRows.value
+]))
 
 // ---- Toast ----
 const toastMsg = ref('')

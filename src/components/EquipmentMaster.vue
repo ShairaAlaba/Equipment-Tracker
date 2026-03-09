@@ -89,6 +89,7 @@
               <th>Equipment / Tool Name</th>
               <th style="min-width:280px">Code Numbers (one per unit)</th>
               <th style="width:60px; text-align:center">QTY</th>
+              <th style="width:100px; text-align:center">Available</th>
               <th style="width:110px; text-align:center">Actions</th>
             </tr>
           </thead>
@@ -96,7 +97,16 @@
             <tr v-for="(eq, i) in filtered" :key="eq.id" :class="{ 'row-editing': editingId === eq.id }">
               <td class="td-num">{{ i + 1 }}</td>
 
-              <td class="td-name">{{ eq.name }}</td>
+              <td class="td-name">
+                <div class="name-avail-wrap">
+                  <span
+                    class="avail-dot"
+                    :class="getAvailableQty(eq) > 0 ? 'avail-dot--green' : 'avail-dot--red'"
+                    :title="getAvailableQty(eq) > 0 ? getAvailableQty(eq) + ' unit(s) available' : 'No units available — fully borrowed out'"
+                  ></span>
+                  {{ eq.name }}
+                </div>
+              </td>
 
               <td class="td-codes">
                 <div class="codes-list">
@@ -114,6 +124,15 @@
                 <span class="qty-badge">{{ eq.qty }}</span>
               </td>
 
+              <td class="td-avail">
+                <span
+                  class="avail-count-badge"
+                  :class="getAvailableQty(eq) > 0 ? 'avail-count--ok' : 'avail-count--none'"
+                >
+                  {{ getAvailableQty(eq) > 0 ? getAvailableQty(eq) + ' avail.' : 'None' }}
+                </span>
+              </td>
+
               <td class="td-actions">
                 <button class="act-btn act-edit" @click="startEdit(eq)" title="Edit">✏️</button>
                 <button class="act-btn act-del"  @click="confirmDelete(eq)" title="Delete">🗑</button>
@@ -121,7 +140,7 @@
             </tr>
 
             <tr v-if="filtered.length === 0">
-              <td colspan="5" class="empty-row">
+              <td colspan="6" class="empty-row">
                 {{ search ? 'No equipment matches your search.' : 'No equipment yet. Add one above.' }}
               </td>
             </tr>
@@ -161,10 +180,25 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, inject } from 'vue'
 import { useEquipmentStore } from '../composables/useEquipmentStore.js'
 
 const { equipmentList, findByCode, addEquipment, removeEquipment, updateEquipment } = useEquipmentStore()
+
+// Receive all equipment rows from parent via provide/inject
+const allEquipRows = inject('allEquipRows', ref([]))
+
+/** How many units of this equipment are currently borrowed (not returned) */
+function getAvailableQty(eq) {
+  const totalWithdrawn = allEquipRows.value
+    .filter(r => r.toolName && r.toolName === eq.name)
+    .reduce((sum, r) => {
+      return sum + (r.borrowers || [])
+        .filter(b => !b.returned)
+        .reduce((s, b) => s + (parseInt(b.withdraw) || 0), 0)
+    }, 0)
+  return Math.max(0, eq.qty - totalWithdrawn)
+}
 
 // ── Search ──
 const search = ref('')
@@ -510,10 +544,61 @@ const lookupResult = computed(() => lookupCode.value.trim() ? findByCode(lookupC
   font-size: 10px;
   letter-spacing: 1.2px;
   text-transform: uppercase;
-  background: var(--surface2);
-  color: #000000;
-  border-bottom: 2px solid var(--border);
+  background: #3b2f20;
+  color: #f5ece0;
+  border-bottom: 2px solid #2a1f12;
   white-space: nowrap;
+}
+
+/* ── Availability dot beside equipment name ── */
+.name-avail-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.avail-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.avail-dot--green {
+  background: #2a7a22;
+  box-shadow: 0 0 6px rgba(42,122,34,0.6);
+}
+
+.avail-dot--red {
+  background: #b83232;
+  box-shadow: 0 0 6px rgba(184,50,50,0.55);
+}
+
+/* ── Available column badge ── */
+.td-avail { text-align: center; vertical-align: middle; }
+
+.avail-count-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.avail-count--ok {
+  background: rgba(42,122,34,0.1);
+  color: #2a7a22;
+  border: 1px solid rgba(42,122,34,0.3);
+}
+
+.avail-count--none {
+  background: rgba(184,50,50,0.08);
+  color: #b83232;
+  border: 1px solid rgba(184,50,50,0.25);
+  font-size: 11px;
 }
 
 .master-table tbody tr {
