@@ -113,7 +113,7 @@ defineEmits(['add-borrower', 'remove-borrower'])
 .borrower-table thead th {
   padding: 8px 10px;
   background:#97704f;
-  color: #ffffff;
+  color: #000000;
   font-family: 'Nunito', sans-serif;
   font-size: 10px;
   font-weight: 800;
