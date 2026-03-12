@@ -124,7 +124,7 @@
         <!-- Withdraw qty note -->
         <div class="withdraw-note">
           Withdraw Qty: <strong>{{ localB.withdraw || 0 }}</strong>
-          &nbsp;·&nbsp; Return Time: <strong>{{ localB.returnTime || '—' }}</strong>
+          &nbsp;·&nbsp; Return Time: <strong>{{ fmt12(localB.returnTime) }}</strong>
         </div>
 
       </div><!-- /card-body -->
@@ -177,6 +177,16 @@ function handleSaveRow() {
 /** Print the card — builds HTML directly from data (NOT from DOM innerHTML)
  *  so all field values are guaranteed to be present in the print output.
  */
+function fmt12(t) {
+  if (!t) return '—'
+  const [hStr, mStr] = t.split(':')
+  let h = parseInt(hStr, 10)
+  const m = mStr || '00'
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12 || 12
+  return h + ':' + m + ' ' + ampm
+}
+
 function printCard() {
   syncChanges()
 
@@ -297,7 +307,7 @@ body{font-family:'Nunito',sans-serif;font-size:11.5px;color:#000;background:#fff
   <div class="col">
     <div class="sec-label">WITHDRAWAL DETAILS</div>
     ${field('DATE BORROWED', localB.dateBorrowed)}
-    ${field('TIME BORROWED', localB.timeBorrowed)}
+    ${field('TIME BORROWED', fmt12(localB.timeBorrowed))}
     ${field('RETURN DATE', localB.returnDate)}
 
     <div class="sec-label">CONDITION UPON RETURN:</div>
@@ -322,7 +332,7 @@ body{font-family:'Nunito',sans-serif;font-size:11.5px;color:#000;background:#fff
 
 <div class="withdraw-strip">
   <span>Withdraw Qty: <strong>${localB.withdraw || 0}</strong></span>
-  <span>Return Time: <strong>${localB.returnTime || '—'}</strong></span>
+  <span>Return Time: <strong>${fmt12(localB.returnTime)}</strong></span>
 </div>
 
 <div class="print-footer">

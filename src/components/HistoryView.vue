@@ -158,10 +158,11 @@
       <div class="modal-box" ref="modalBox">
 
         <div class="modal-toolbar">
-          <div class="modal-title">📋 Record — {{ viewing.date }}</div>
+          <div class="modal-title">Record — {{ viewing.date }}</div>
           <div class="modal-actions">
-            <button class="btn btn-primary btn-sm"   @click="printSingle(viewing)">🖨 Print</button>
-            <button class="btn btn-danger btn-sm"    @click="confirmDeleteRecord(viewing.date)">🗑 Delete Day</button>
+            <button class="btn btn-primary btn-sm"   @click="printSingle(viewing)">Print</button>
+            <button class="btn btn-edit btn-sm"      @click="editDay(viewing)">Edit Day</button>
+            <button class="btn btn-danger btn-sm"    @click="confirmDeleteRecord(viewing.date)">Delete Day</button>
             <button class="btn btn-secondary btn-sm" @click="viewing = null">✕ Close</button>
           </div>
         </div>
@@ -218,9 +219,9 @@
                       <td class="mono">{{ b.controlNo||'—' }}</td>
                       <td class="tc mono chip-blue">{{ b.withdraw||0 }}</td>
                       <td class="mono">{{ b.dateBorrowed||'—' }}</td>
-                      <td class="mono">{{ b.timeBorrowed||'—' }}</td>
+                      <td class="mono">{{ fmt12(b.timeBorrowed) }}</td>
                       <td class="mono">{{ b.returnDate||'—' }}</td>
-                      <td class="mono">{{ b.returnTime||'—' }}</td>
+                      <td class="mono">{{ fmt12(b.returnTime) }}</td>
                       <td><span :class="'condition-'+b.conditionCheckout">{{ b.conditionCheckout||'—' }}</span></td>
                       <td><span :class="'condition-'+b.conditionReturn">{{ b.conditionReturn||'—' }}</span></td>
                       <td class="tc no-print">
@@ -228,7 +229,7 @@
                           class="borrower-edit-btn"
                           @click="editBorrowerInRecord(viewing, 'new', ri, bi, row, b)"
                           title="Go to Daily Record to edit this borrower"
-                        >✏️ Edit</button>
+                        >Edit</button>
                       </td>
                     </tr>
                   </tbody>
@@ -282,15 +283,15 @@
                       <td>{{ b.project||'—' }}</td>
                       <td class="mono">{{ b.controlNo||'—' }}</td>
                       <td class="mono">{{ b.dateBorrowed||'—' }}</td>
-                      <td class="mono">{{ b.timeBorrowed||'—' }}</td>
+                      <td class="mono">{{ fmt12(b.timeBorrowed) }}</td>
                       <td class="mono">{{ b.returnDate||'—' }}</td>
-                      <td class="mono">{{ b.returnTime||'—' }}</td>
+                      <td class="mono">{{ fmt12(b.returnTime) }}</td>
                       <td class="tc no-print">
                         <button
                           class="borrower-edit-btn"
                           @click="editBorrowerInRecord(viewing, 'old', ri, bi, row, b)"
                           title="Go to Daily Record to edit this borrower"
-                        >✏️ Edit</button>
+                        >Edit</button>
                       </td>
                     </tr>
                   </tbody>
@@ -310,9 +311,9 @@
     <div class="modal-overlay" v-if="editingRow" @click.self="editingRow = null">
       <div class="modal-box modal-box--edit">
         <div class="modal-toolbar">
-          <div class="modal-title">✏️ Edit Equipment Row</div>
+          <div class="modal-title">Edit Equipment Row</div>
           <div class="modal-actions">
-            <button class="btn btn-primary btn-sm"  @click="saveEditRow">💾 Save Changes</button>
+            <button class="btn btn-primary btn-sm"  @click="saveEditRow">Save Changes</button>
             <button class="btn btn-secondary btn-sm" @click="editingRow = null">✕ Cancel</button>
           </div>
         </div>
@@ -405,7 +406,7 @@ const props = defineProps({
   totalBorrowers: { type: Function, required: true }
 })
 
-const emit = defineEmits(['load-record', 'delete-record', 'update-history', 'edit-borrower-in-record'])
+const emit = defineEmits(['load-record', 'delete-record', 'update-history', 'edit-borrower-in-record', 'load-record-for-edit'])
 
 // ── State ──────────────────────────────────────────────────────
 const searchQuery = ref('')
@@ -521,6 +522,13 @@ const groupedMonthly = computed(() => {
 // ── Modal open/close ───────────────────────────────────────────
 function openRecord(rec) { viewing.value = rec }
 
+// ── Load record back into Daily Record for editing ─────────
+function editDay(rec) {
+  if (!confirm(`Load the record for ${rec.date} into Daily Record for editing?\n\nThe current unsaved Daily Record will be replaced.`)) return
+  emit('load-record-for-edit', JSON.parse(JSON.stringify(rec)))
+  viewing.value = null
+}
+
 // ── Delete entire day record ───────────────────────────────────
 function confirmDeleteRecord(date) {
   if (confirm(`Delete ALL records for ${date}? This cannot be undone.`)) {
@@ -606,6 +614,19 @@ function persistAndRefresh(rec) {
 }
 
 // ══════════════════════════════════════════════════════════════
+// TIME FORMATTER — convert HH:MM (24h) → h:MM AM/PM
+// ══════════════════════════════════════════════════════════════
+function fmt12(t) {
+  if (!t) return '—'
+  const [hStr, mStr] = t.split(':')
+  let h = parseInt(hStr, 10)
+  const m = mStr || '00'
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12 || 12
+  return h + ':' + m + ' ' + ampm
+}
+
+// ══════════════════════════════════════════════════════════════
 // PRINT HELPERS — build borrower rows HTML
 // ══════════════════════════════════════════════════════════════
 function buildBorrowerRowsNew(borrowers) {
@@ -618,9 +639,9 @@ function buildBorrowerRowsNew(borrowers) {
       <td class="mono">${b.controlNo || '—'}</td>
       <td class="tc mono" style="color:#2a6099;font-weight:700">${b.withdraw || 0}</td>
       <td class="mono">${b.dateBorrowed || '—'}</td>
-      <td class="mono">${b.timeBorrowed || '—'}</td>
+      <td class="mono">${fmt12(b.timeBorrowed)}</td>
       <td class="mono">${b.returnDate || '—'}</td>
-      <td class="mono">${b.returnTime || '—'}</td>
+      <td class="mono">${fmt12(b.returnTime)}</td>
       <td class="cond-${b.conditionCheckout || ''}">${b.conditionCheckout || '—'}</td>
       <td class="cond-${b.conditionReturn || ''}">${b.conditionReturn || '—'}</td>
     </tr>`).join('')
@@ -635,9 +656,9 @@ function buildBorrowerRowsOld(borrowers) {
       <td>${b.project || '—'}</td>
       <td class="mono">${b.controlNo || '—'}</td>
       <td class="mono">${b.dateBorrowed || '—'}</td>
-      <td class="mono">${b.timeBorrowed || '—'}</td>
+      <td class="mono">${fmt12(b.timeBorrowed)}</td>
       <td class="mono">${b.returnDate || '—'}</td>
-      <td class="mono">${b.returnTime || '—'}</td>
+      <td class="mono">${fmt12(b.returnTime)}</td>
     </tr>`).join('')
 }
 
@@ -1666,6 +1687,8 @@ function printGroup(records, reportType, periodLabel) {
 .btn-sm { padding: 7px 16px; font-size: 12px; }
 .btn-primary   { background: var(--accent);  color: #fff; }
 .btn-primary:hover   { background: #7a5a3a; }
+.btn-edit      { background: #2a6099; color: #fff; }
+.btn-edit:hover      { background: #1f4a75; }
 .btn-secondary { background: var(--surface2); color: #000; border: 1px solid var(--border); }
 .btn-secondary:hover { background: var(--border); }
 .btn-danger    { background: var(--danger); color: #fff; }

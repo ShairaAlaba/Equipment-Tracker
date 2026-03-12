@@ -14,6 +14,9 @@
     v-model:record-date="recordDate"
     :new-equip-rows="newEquipRows"
     :old-equip-rows="oldEquipRows"
+    :saved-dates="savedDates"
+    :has-draft="hasDraft"
+    @switch-date="handleSwitchDate"
     @save="handleSave"
     @clear-all="clearAll"
     @add-row="addRow"
@@ -30,6 +33,7 @@
     :history="sortedHistory"
     :total-borrowers="totalBorrowers"
     @load-record="handleLoadRecord"
+    @load-record-for-edit="handleLoadRecordForEdit"
     @delete-record="handleDeleteRecord"
   />
 
@@ -68,7 +72,10 @@ const {
   oldEquipRows,
   history,
   sortedHistory,
+  savedDates,
+  hasDraft,
   loadHistory,
+  switchToDate,
   addRow,
   removeRow,
   clearAll,
@@ -103,10 +110,21 @@ function handleSave() {
   showToast('✅ Record saved for ' + recordDate.value)
 }
 
+function handleSwitchDate(date) {
+  switchToDate(date)
+  showToast('📅 Switched to ' + date)
+}
+
 function handleLoadRecord(record) {
   loadRecord(record)
   tab.value = 'daily'
   showToast('📂 Record loaded for ' + record.date)
+}
+
+function handleLoadRecordForEdit(record) {
+  loadRecord(record)
+  tab.value = 'daily'
+  showToast('✏️ Editing record for ' + record.date)
 }
 
 function handleDeleteRecord(date) {
@@ -115,40 +133,52 @@ function handleDeleteRecord(date) {
 }
 
 /**
- * Save a single equipment row to history and remove it from the daily record.
- * Triggered when the user clicks "Save & Move to History" in the borrower card modal.
- * section: 'new' | 'old'
- * row: the equipment row object
+ * "Save & Move to History" — called from BorrowerCardModal.
+ * Upserts the row into the history record for today:
+ *   • If a row with the same ID already exists (put there by saveRecord()),
+ *     REPLACE it with the updated version — no duplicate.
+ *   • If the row is brand-new (no prior saveRecord()), append it.
+ * Then removes the row from the active daily record.
  */
 function handleSaveRow(section, row) {
-  // Build a history record snapshot with just this one row
   const today = recordDate.value
+  const sectionKey = section === 'new' ? 'newEquipRows' : 'oldEquipRows'
+  const rowSnapshot = JSON.parse(JSON.stringify(row))
+
   const existing = history.value.find(r => r.date === today)
 
   if (existing) {
-    // Append row to the matching day's section
-    if (section === 'new') {
-      existing.newEquipRows = [...(existing.newEquipRows || []), JSON.parse(JSON.stringify(row))]
+    const rows = existing[sectionKey] || []
+    const idx = rows.findIndex(r => r.id === row.id)
+    if (idx >= 0) {
+      // Row already saved → replace it with the updated version
+      rows.splice(idx, 1, rowSnapshot)
     } else {
-      existing.oldEquipRows = [...(existing.oldEquipRows || []), JSON.parse(JSON.stringify(row))]
+      // Row not yet in history → append
+      rows.push(rowSnapshot)
     }
+    existing[sectionKey] = rows
+    existing.savedAt = new Date().toISOString()
   } else {
-    // Create a new history entry for today with just this row
-    history.value.push({
+    // No history entry for today at all → create one
+    const emptyOther = section === 'new' ? 'oldEquipRows' : 'newEquipRows'
+    const newEntry = {
       date: today,
       savedAt: new Date().toISOString(),
-      newEquipRows: section === 'new' ? [JSON.parse(JSON.stringify(row))] : [],
-      oldEquipRows: section === 'old' ? [JSON.parse(JSON.stringify(row))] : [],
-    })
+      newEquipRows: [],
+      oldEquipRows: [],
+    }
+    newEntry[sectionKey] = [rowSnapshot]
+    newEntry[emptyOther] = []
+    history.value.push(newEntry)
   }
+
   // Persist to localStorage
   localStorage.setItem('eqt_history', JSON.stringify(history.value))
 
   // Remove the row from the active daily record
-  removeRow(section, section === 'new'
-    ? newEquipRows.value.findIndex(r => r.id === row.id)
-    : oldEquipRows.value.findIndex(r => r.id === row.id)
-  )
+  const rowIndex = (section === 'new' ? newEquipRows : oldEquipRows).value.findIndex(r => r.id === row.id)
+  if (rowIndex >= 0) removeRow(section, rowIndex)
 
   showToast('✅ Row saved to History for ' + today)
 }

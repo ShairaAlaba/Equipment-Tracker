@@ -172,13 +172,47 @@ export function useRecords() {
     [...history.value].sort((a, b) => b.date.localeCompare(a.date))
   )
 
+  // ---- Set of dates that have a saved history record ----
+  const savedDates = computed(() => new Set(history.value.map(r => r.date)))
+
+  // ---- True when the active daily record has any non-empty rows ----
+  const hasDraft = computed(() => {
+    const hasData = rows => rows.some(r =>
+      r.codeNo || r.toolName || r.borrowers.length > 0
+    )
+    return hasData(newEquipRows.value) || hasData(oldEquipRows.value)
+  })
+
+  // ---- Switch active date; auto-load saved record if one exists ----
+  function switchToDate(date) {
+    const existing = history.value.find(r => r.date === date)
+    if (existing) {
+      // Load the saved record for that date into the daily view
+      recordDate.value = existing.date
+      newEquipRows.value = JSON.parse(JSON.stringify(existing.newEquipRows || [makeRow()]))
+      oldEquipRows.value = JSON.parse(JSON.stringify(existing.oldEquipRows || [makeRow()]))
+      // Ensure at least one blank row per section
+      if (!newEquipRows.value.length) newEquipRows.value = [makeRow()]
+      if (!oldEquipRows.value.length) oldEquipRows.value = [makeRow()]
+    } else {
+      // No saved record — clear rows and set the date
+      recordDate.value = date
+      newEquipRows.value = [makeRow()]
+      oldEquipRows.value = [makeRow()]
+    }
+    persistActive()
+  }
+
   return {
     recordDate,
     newEquipRows,
     oldEquipRows,
     history,
     sortedHistory,
+    savedDates,
+    hasDraft,
     loadHistory,
+    switchToDate,
     addRow,
     removeRow,
     clearAll,

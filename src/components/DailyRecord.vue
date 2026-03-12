@@ -45,7 +45,7 @@
         <input
           type="date"
           :value="recordDate"
-          @input="$emit('update:recordDate', $event.target.value)"
+          @change="$emit('switch-date', $event.target.value)"
         />
       </div>
 
@@ -131,6 +131,7 @@ defineProps({
 
 defineEmits([
   'update:recordDate',
+  'switch-date',
   'save',
   'clear-all',
   'add-row',
