@@ -17,7 +17,7 @@
 
       <!-- Panel header bar -->
       <div class="avail-panel-header">
-        <span class="avail-panel-icon">📦</span>
+        <span class="avail-panel-icon"></span>
         <span class="avail-panel-title">Equipment Availability</span>
         <span class="avail-panel-sub">Live · updates when borrowers withdraw or return</span>
         <span class="avail-legend">

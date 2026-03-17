@@ -6,7 +6,7 @@
     ══════════════════════════════════════ -->
     <div class="toolbar">
       <div class="tb-search-wrap">
-        <span class="search-icon">🔍</span>
+        <span class="search-icon"></span>
         <input
           type="text"
           v-model="searchQuery"
@@ -24,9 +24,10 @@
         </div>
 
         <div class="view-toggle">
-          <button :class="['vt', { 'vt--active': viewMode === 'all' }]"     @click="viewMode = 'all'">All</button>
-          <button :class="['vt', { 'vt--active': viewMode === 'weekly' }]"  @click="viewMode = 'weekly'">Weekly</button>
-          <button :class="['vt', { 'vt--active': viewMode === 'monthly' }]" @click="viewMode = 'monthly'">Monthly</button>
+          <button :class="['vt', { 'vt--active': viewMode === 'all' }]"      @click="viewMode = 'all'">All</button>
+          <button :class="['vt', { 'vt--active': viewMode === 'weekly' }]"   @click="viewMode = 'weekly'">Weekly</button>
+          <button :class="['vt', { 'vt--active': viewMode === 'monthly' }]"  @click="viewMode = 'monthly'">Monthly</button>
+          <button :class="['vt', { 'vt--active': viewMode === 'yearly' }]"   @click="viewMode = 'yearly'">Yearly</button>
         </div>
 
         <div class="result-pill">
@@ -88,9 +89,14 @@
               </span>
             </div>
           </div>
-          <button class="print-group-btn" @click="printGroup(week.records, 'Weekly Report', week.label)">
-            🖨 Print Week
-          </button>
+          <div class="btn-group-row">
+            <button class="print-group-btn" @click="printGroup(week.records, 'Weekly Report', week.label)">
+              🖨 Print Week
+            </button>
+            <button class="print-group-btn export-group-btn" @click="exportGroupExcel(week.records, 'Weekly Report', week.label)">
+               Export Week
+            </button>
+          </div>
         </div>
         <div class="record-list period-inner">
           <div
@@ -128,13 +134,63 @@
               </span>
             </div>
           </div>
-          <button class="print-group-btn" @click="printGroup(month.records, 'Monthly Report', month.label)">
-            🖨 Print Month
-          </button>
+          <div class="btn-group-row">
+            <button class="print-group-btn" @click="printGroup(month.records, 'Monthly Report', month.label)">
+              🖨 Print Month
+            </button>
+            <button class="print-group-btn export-group-btn" @click="exportGroupExcel(month.records, 'Monthly Report', month.label)">
+               Export Month
+            </button>
+          </div>
         </div>
         <div class="record-list period-inner">
           <div
             v-for="rec in month.records"
+            :key="rec.date"
+            class="record-row"
+            @click="openRecord(rec)"
+          >
+            <div class="rec-date">{{ rec.date }}</div>
+            <div class="rec-stats">
+              <span>{{ totalRows(rec) }} row{{ totalRows(rec) !== 1 ? 's' : '' }}</span>
+              <span class="dot-sep">·</span>
+              <span>{{ totalBorrowers(rec) }} borrower{{ totalBorrowers(rec) !== 1 ? 's' : '' }}</span>
+            </div>
+            <button class="edit-btn" @click.stop="openRecord(rec)">VIEW</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ══════════════════════════════════════
+         YEARLY VIEW
+    ══════════════════════════════════════ -->
+    <template v-if="viewMode === 'yearly' && flatFiltered.length > 0">
+      <div v-for="year in groupedYearly" :key="year.key" class="period-block">
+        <div class="period-header period-header--year">
+          <div class="period-left">
+            <span class="period-badge badge--year">YEAR</span>
+            <div class="period-info">
+              <span class="period-title">{{ year.label }}</span>
+              <span class="period-meta">
+                {{ year.records.length }} day{{ year.records.length !== 1 ? 's' : '' }}
+                &nbsp;·&nbsp; {{ groupTotalRows(year.records) }} equipment rows
+                &nbsp;·&nbsp; {{ groupTotalBorrowers(year.records) }} borrowers
+              </span>
+            </div>
+          </div>
+          <div class="btn-group-row">
+            <button class="print-group-btn" @click="printGroup(year.records, 'Yearly Report', year.label)">
+              🖨 Print Year
+            </button>
+            <button class="print-group-btn export-group-btn" @click="exportGroupExcel(year.records, 'Yearly Report', year.label)">
+               Export Year
+            </button>
+          </div>
+        </div>
+        <div class="record-list period-inner">
+          <div
+            v-for="rec in year.records"
             :key="rec.date"
             class="record-row"
             @click="openRecord(rec)"
@@ -158,9 +214,10 @@
       <div class="modal-box" ref="modalBox">
 
         <div class="modal-toolbar">
-          <div class="modal-title">Record — {{ viewing.date }}</div>
+          <div class="modal-title">📋 Record — {{ viewing.date }}</div>
           <div class="modal-actions">
-            <button class="btn btn-primary btn-sm"   @click="printSingle(viewing)">Print</button>
+            <button class="btn btn-primary btn-sm"   @click="printSingle(viewing)">🖨 Print</button>
+            <button class="btn btn-excel btn-sm"     @click="exportSingleExcel(viewing)">Excel</button>
             <button class="btn btn-edit btn-sm"      @click="editDay(viewing)">Edit Day</button>
             <button class="btn btn-danger btn-sm"    @click="confirmDeleteRecord(viewing.date)">Delete Day</button>
             <button class="btn btn-secondary btn-sm" @click="viewing = null">✕ Close</button>
@@ -496,6 +553,8 @@ function monthLabel(key) {
   const [y, m] = key.split('-')
   return new Date(+y, +m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 }
+function getYearKey(dateStr) { return dateStr.slice(0, 4) }
+function yearLabel(key) { return key }
 
 const groupedWeekly = computed(() => {
   const map = new Map()
@@ -517,6 +576,17 @@ const groupedMonthly = computed(() => {
   }
   return [...map.entries()].sort(([a],[b]) => b.localeCompare(a))
     .map(([key, records]) => ({ key, label: monthLabel(key), records: records.sort((a,b) => b.date.localeCompare(a.date)) }))
+})
+
+const groupedYearly = computed(() => {
+  const map = new Map()
+  for (const rec of flatFiltered.value) {
+    const key = getYearKey(rec.date)
+    if (!map.has(key)) map.set(key, [])
+    map.get(key).push(rec)
+  }
+  return [...map.entries()].sort(([a],[b]) => b.localeCompare(a))
+    .map(([key, records]) => ({ key, label: yearLabel(key), records: records.sort((a,b) => b.date.localeCompare(a.date)) }))
 })
 
 // ── Modal open/close ───────────────────────────────────────────
@@ -1147,6 +1217,118 @@ function printGroup(records, reportType, periodLabel) {
   w.document.close()
   w.onload = () => { w.focus(); w.print() }
 }
+
+// ══════════════════════════════════════════════════════════════
+// EXCEL EXPORT — uses SheetJS (loaded on demand from CDN)
+// ══════════════════════════════════════════════════════════════
+
+/** Lazy-load SheetJS from CDN, resolves with the XLSX global */
+function loadXLSX() {
+  return new Promise((resolve, reject) => {
+    if (window.XLSX) { resolve(window.XLSX); return }
+    const s = document.createElement('script')
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
+    s.onload  = () => resolve(window.XLSX)
+    s.onerror = () => reject(new Error('Failed to load SheetJS'))
+    document.head.appendChild(s)
+  })
+}
+
+/**
+ * Build a flat array of row objects for all equipment rows + borrowers.
+ * Each borrower occupies one spreadsheet row.
+ * Equipment rows without borrowers still get one row (borrower fields blank).
+ */
+function buildSheetRows(records) {
+  const rows = []
+  for (const rec of records) {
+    const sections = [
+      { label: 'Section A — New/Good', rows: rec.newEquipRows || [] },
+      { label: 'Section B — Old/Damaged', rows: rec.oldEquipRows || [] },
+    ]
+    for (const sec of sections) {
+      for (const row of sec.rows) {
+        const borrowers = row.borrowers && row.borrowers.length ? row.borrowers : [null]
+        for (const b of borrowers) {
+          rows.push({
+            'Date':               rec.date,
+            'Section':            sec.label,
+            'Equipment / Tool':   row.toolName   || '',
+            'Code No.':           row.codeNo      || '',
+            'Total QTY':          row.qty         || '',
+            'Condition':          row.condition   || '',
+            'Damage Notes':       row.damageNotes || '',
+            'Accessories Returned': row.accessoriesReturned === true ? 'YES'
+                                  : row.accessoriesReturned === false ? 'NO' : '',
+            'Remarks':            row.remarks     || '',
+            'Borrower Name':      b ? (b.name    || '') : '',
+            'Project':            b ? (b.project || '') : '',
+            'Withdraw QTY':       b ? (b.withdraw || 0) : '',
+            'Date Borrowed':      b ? (b.dateBorrowed || '') : '',
+            'Time Borrowed':      b ? (b.timeBorrowed || '') : '',
+            'Checkout Condition': b ? (b.conditionCheckout || '') : '',
+            'Return Date':        b ? (b.returnDate || '') : '',
+            'Return Time':        b ? (b.returnTime || '') : '',
+            'Return Condition':   b ? (b.conditionReturn || '') : '',
+          })
+        }
+      }
+    }
+  }
+  return rows
+}
+
+/** Style the header row: bold + dark background + white text */
+function styleSheet(ws, XLSX) {
+  const range = XLSX.utils.decode_range(ws['!ref'])
+  for (let C = range.s.c; C <= range.e.c; C++) {
+    const cell = ws[XLSX.utils.encode_cell({ r: 0, c: C })]
+    if (!cell) continue
+    cell.s = {
+      font:      { bold: true, color: { rgb: 'FFFFFF' } },
+      fill:      { fgColor: { rgb: '3B2A1A' } },
+      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    }
+  }
+  // Freeze top row
+  ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft' }
+}
+
+/** Shared download helper */
+async function downloadExcel(records, filename, sheetName) {
+  let XLSX
+  try { XLSX = await loadXLSX() }
+  catch { alert('Could not load Excel library. Check your internet connection.'); return }
+
+  const data  = buildSheetRows(records)
+  if (!data.length) { alert('No data to export.'); return }
+
+  const ws = XLSX.utils.json_to_sheet(data)
+
+  // Auto column widths
+  const colWidths = Object.keys(data[0]).map(key => ({
+    wch: Math.max(key.length, ...data.map(r => String(r[key] ?? '').length)) + 2
+  }))
+  ws['!cols'] = colWidths
+
+  styleSheet(ws, XLSX)
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31))
+  XLSX.writeFile(wb, filename)
+}
+
+/** Export a single day record */
+async function exportSingleExcel(rec) {
+  await downloadExcel([rec], `Equipment_Record_${rec.date}.xlsx`, rec.date)
+}
+
+/** Export a group of records (weekly / monthly / yearly) */
+async function exportGroupExcel(records, reportType, periodLabel) {
+  const safeName = periodLabel.replace(/[^a-zA-Z0-9_\-]/g, '_')
+  const safeType = reportType.replace(/\s+/g, '_')
+  await downloadExcel(records, `${safeType}_${safeName}.xlsx`, periodLabel.slice(0, 31))
+}
 </script>
 
 <style scoped>
@@ -1373,6 +1555,7 @@ function printGroup(records, reportType, periodLabel) {
 
 .period-header--week  { background: linear-gradient(135deg, #f0e8dc, #e8ddd0); border: 1.5px solid var(--border); }
 .period-header--month { background: linear-gradient(135deg, #e8ddd0, #ddd0c4); border: 1.5px solid #d0c4b8; }
+.period-header--year  { background: linear-gradient(135deg, #dde8f0, #ccd8e8); border: 1.5px solid #b8ccdc; }
 
 .period-left {
   display: flex;
@@ -1392,6 +1575,7 @@ function printGroup(records, reportType, periodLabel) {
 
 .badge--week  { background: var(--accent);  color: #fff; }
 .badge--month { background: var(--accent2); color: #fff; }
+.badge--year  { background: #2a6099;        color: #fff; }
 
 .period-info {
   display: flex;
@@ -1426,6 +1610,11 @@ function printGroup(records, reportType, periodLabel) {
   flex-shrink: 0;
 }
 .print-group-btn:hover { background: var(--surface2); border-color: var(--accent); }
+
+.export-group-btn { background: #eaf4ea; border-color: #27ae60; color: #1a6e3a; }
+.export-group-btn:hover { background: #d4edda; border-color: #1e8449; }
+
+.btn-group-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 
 .period-inner { border-radius: 0 0 12px 12px; overflow: hidden; }
 
@@ -1693,6 +1882,8 @@ function printGroup(records, reportType, periodLabel) {
 .btn-secondary:hover { background: var(--border); }
 .btn-danger    { background: var(--danger); color: #fff; }
 .btn-danger:hover    { background: #a02020; }
+.btn-excel     { background: #27ae60; color: #fff; }
+.btn-excel:hover     { background: #1e8449; }
 
 /* ── Edit form ── */
 .edit-form { padding: 20px 24px 24px; }
