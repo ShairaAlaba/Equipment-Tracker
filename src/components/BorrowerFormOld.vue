@@ -32,22 +32,22 @@
                 <td class="row-num">{{ bi + 1 }}</td>
 
                 <td>
-                  <input type="text" v-model="b.name" placeholder="Full name" />
+                  <input type="text" v-model="b.name" placeholder="Full name" data-col="0" @keydown.enter.prevent="focusNext($event)" />
                 </td>
 
                 <td>
-                  <input type="text" v-model="b.project" placeholder="Project" />
+                  <input type="text" v-model="b.project" placeholder="Project" data-col="1" @keydown.enter.prevent="focusNext($event)" />
                 </td>
 
                 <!-- Control No. per borrower -->
                 <td>
-                  <input type="text" v-model="b.controlNo" placeholder="CTRL-0001" class="ctrl-input" />
+                  <input type="text" v-model="b.controlNo" placeholder="CTRL-0001" class="ctrl-input" data-col="2" @keydown.enter.prevent="focusNext($event)" />
                 </td>
 
-                <td><input type="date" v-model="b.dateBorrowed" /></td>
-                <td><input type="time" v-model="b.timeBorrowed" /></td>
-                <td><input type="date" v-model="b.returnDate" /></td>
-                <td><input type="time" v-model="b.returnTime" /></td>
+                <td><input type="date" v-model="b.dateBorrowed" data-col="3" @keydown.enter.prevent="focusNext($event)" /></td>
+                <td><input type="time" v-model="b.timeBorrowed" data-col="4" @keydown.enter.prevent="focusNext($event)" /></td>
+                <td><input type="date" v-model="b.returnDate" data-col="5" @keydown.enter.prevent="focusNext($event)" /></td>
+                <td><input type="time" v-model="b.returnTime" data-col="6" @keydown.enter.prevent="focusNext($event)" /></td>
 
                 <td>
                   <button class="del-btn" @click="$emit('remove-borrower', row, bi)" title="Remove">✕</button>
@@ -75,6 +75,18 @@ defineProps({
 })
 
 defineEmits(['add-borrower', 'remove-borrower'])
+
+function focusNext(event) {
+  const tr = event.target.closest('tr')
+  if (!tr) return
+  const focusables = Array.from(
+    tr.querySelectorAll('input[data-col], select[data-col], textarea[data-col]')
+  ).filter(el => !el.disabled)
+  const idx = focusables.indexOf(event.target)
+  if (idx !== -1 && idx < focusables.length - 1) {
+    focusables[idx + 1].focus()
+  }
+}
 </script>
 
 <style scoped>

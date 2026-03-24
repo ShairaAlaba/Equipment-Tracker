@@ -36,16 +36,16 @@
                 :class="{ 'row-returned': b.returned }"
               >
                 <td class="row-num">{{ bi + 1 }}</td>
-                <td><input type="text" v-model="b.name" placeholder="Full name" /></td>
-                <td><input type="text" v-model="b.project" placeholder="Project" /></td>
-                <td><input type="text" v-model="b.controlNo" placeholder="CTRL-0001" class="ctrl-input" /></td>
+                <td><input type="text" v-model="b.name" placeholder="Full name" data-col="0" @keydown.enter.prevent="focusNext($event)" /></td>
+                <td><input type="text" v-model="b.project" placeholder="Project" data-col="1" @keydown.enter.prevent="focusNext($event)" /></td>
+                <td><input type="text" v-model="b.controlNo" placeholder="CTRL-0001" class="ctrl-input" data-col="2" @keydown.enter.prevent="focusNext($event)" /></td>
 
                 <td class="wd-cell">
-                  <input type="number" min="0" v-model.number="b.withdraw" placeholder="0" class="wd-input" />
+                  <input type="number" min="0" v-model.number="b.withdraw" placeholder="0" class="wd-input" data-col="3" @keydown.enter.prevent="focusNext($event)" />
                 </td>
 
                 <td>
-                  <select v-model="b.conditionCheckout" :class="'condition-' + b.conditionCheckout">
+                  <select v-model="b.conditionCheckout" :class="'condition-' + b.conditionCheckout" data-col="4" @keydown.enter.prevent="focusNext($event)">
                     <option value="">— Select —</option>
                     <option value="excellent">Excellent</option>
                     <option value="good">Good</option>
@@ -55,24 +55,24 @@
                 </td>
 
                 <td>
-                  <textarea v-model="b.conditionCheckoutNotes" placeholder="Damage notes at checkout..." rows="2" />
+                  <textarea v-model="b.conditionCheckoutNotes" placeholder="Damage notes at checkout..." rows="2" data-col="5" @keydown.enter.prevent="focusNext($event)" />
                 </td>
 
-                <td><input type="date" v-model="b.dateBorrowed" /></td>
-                <td><input type="time" v-model="b.timeBorrowed" /></td>
+                <td><input type="date" v-model="b.dateBorrowed" data-col="6" @keydown.enter.prevent="focusNext($event)" /></td>
+                <td><input type="time" v-model="b.timeBorrowed" data-col="7" @keydown.enter.prevent="focusNext($event)" /></td>
 
                 <!-- Return Date — highlighted green after Returned clicked -->
                 <td :class="{ 'returned-cell': b.returned }">
-                  <input type="date" v-model="b.returnDate" />
+                  <input type="date" v-model="b.returnDate" data-col="8" @keydown.enter.prevent="focusNext($event)" />
                   <span v-if="b.returned" class="returned-tag">✓ Returned</span>
                 </td>
 
                 <td :class="{ 'returned-cell': b.returned }">
-                  <input type="time" v-model="b.returnTime" />
+                  <input type="time" v-model="b.returnTime" data-col="9" @keydown.enter.prevent="focusNext($event)" />
                 </td>
 
                 <td>
-                  <select v-model="b.conditionReturn" :class="'condition-' + b.conditionReturn">
+                  <select v-model="b.conditionReturn" :class="'condition-' + b.conditionReturn" data-col="10" @keydown.enter.prevent="focusNext($event)">
                     <option value="">— Select —</option>
                     <option value="excellent">Excellent</option>
                     <option value="good">Good</option>
@@ -82,7 +82,7 @@
                 </td>
 
                 <td>
-                  <textarea v-model="b.conditionReturnNotes" placeholder="Damage notes upon return..." rows="2" />
+                  <textarea v-model="b.conditionReturnNotes" placeholder="Damage notes upon return..." rows="2" data-col="11" @keydown.enter.prevent="focusNext($event)" />
                 </td>
 
                 <!-- ── ACTIONS column ── -->
@@ -173,6 +173,19 @@ const viewingBorrower = ref(null)
 
 function openCard(b) {
   viewingBorrower.value = b
+}
+
+// ── Enter key: move focus to next column in the same row ──
+function focusNext(event) {
+  const tr = event.target.closest('tr')
+  if (!tr) return
+  const focusables = Array.from(
+    tr.querySelectorAll('input[data-col], select[data-col], textarea[data-col]')
+  ).filter(el => !el.disabled)
+  const idx = focusables.indexOf(event.target)
+  if (idx !== -1 && idx < focusables.length - 1) {
+    focusables[idx + 1].focus()
+  }
 }
 
 // ── Mark Returned: auto-fill date + time, free up availability ──

@@ -98,8 +98,10 @@
                     placeholder="e.g. 8160"
                     class="code-input"
                     :class="{ 'code-input--error': row._codeError }"
+                    data-col="0"
                     @input="onCodeInput(row)"
                     @blur="onCodeInput(row)"
+                    @keydown.enter.prevent="focusNext($event)"
                   />
                   <!-- Normal match dot (no error) -->
                   <span
@@ -135,6 +137,8 @@
                   v-model="row.toolName"
                   placeholder="Enter equipment name"
                   class="equip-name-input"
+                  data-col="1"
+                  @keydown.enter.prevent="focusNext($event)"
                 />
                 <!-- Blocked state — greyed out placeholder -->
                 <div v-else class="equip-name-blocked">—</div>
@@ -168,7 +172,7 @@
               </td>
 
               <td>
-                <select class="condition-select" v-model="row.condition" :class="'condition-' + row.condition" :disabled="!!row._codeError">
+                <select class="condition-select" v-model="row.condition" :class="'condition-' + row.condition" :disabled="!!row._codeError" data-col="2" @keydown.enter.prevent="focusNext($event)">
                   <option value="">— Select —</option>
                   <option value="excellent">Excellent</option>
                   <option value="good">Good</option>
@@ -177,7 +181,7 @@
                 </select>
               </td>
 
-              <td><textarea v-model="row.damageNotes" placeholder="Describe damage (if any)..." rows="2" :disabled="!!row._codeError" /></td>
+              <td><textarea v-model="row.damageNotes" placeholder="Describe damage (if any)..." rows="2" :disabled="!!row._codeError" data-col="3" @keydown.enter.prevent="focusNext($event)" /></td>
 
               <td>
                 <div class="toggle-wrap">
@@ -186,7 +190,7 @@
                 </div>
               </td>
 
-              <td><textarea v-model="row.remarks" placeholder="Additional remarks..." rows="2" :disabled="!!row._codeError" /></td>
+              <td><textarea v-model="row.remarks" placeholder="Additional remarks..." rows="2" :disabled="!!row._codeError" data-col="4" @keydown.enter.prevent="focusNext($event)" /></td>
 
               <td class="actions-cell">
                 <button
@@ -241,11 +245,11 @@
           <template v-for="(row, ri) in rows" :key="row.id">
             <tr class="equip-row">
               <td class="row-num">{{ ri + 1 }}</td>
-              <td><input type="text" v-model="row.codeNo" placeholder="e.g. 8100" class="code-input" @input="onCodeInput(row)" @blur="onCodeInput(row)" /></td>
-              <td><input type="text" v-model="row.toolName" placeholder="Tool / Equipment name" /></td>
-              <td><input type="number" min="0" v-model.number="row.totalQty" placeholder="0" class="inv-input-old" /></td>
+              <td><input type="text" v-model="row.codeNo" placeholder="e.g. 8100" class="code-input" data-col="0" @input="onCodeInput(row)" @blur="onCodeInput(row)" @keydown.enter.prevent="focusNext($event)" /></td>
+              <td><input type="text" v-model="row.toolName" placeholder="Tool / Equipment name" data-col="1" @keydown.enter.prevent="focusNext($event)" /></td>
+              <td><input type="number" min="0" v-model.number="row.totalQty" placeholder="0" class="inv-input-old" data-col="2" @keydown.enter.prevent="focusNext($event)" /></td>
               <td>
-                <select class="condition-select" v-model="row.condition" :class="'condition-' + row.condition">
+                <select class="condition-select" v-model="row.condition" :class="'condition-' + row.condition" data-col="3" @keydown.enter.prevent="focusNext($event)">
                   <option value="">— Select —</option>
                   <option value="excellent">Excellent</option>
                   <option value="good">Good</option>
@@ -253,14 +257,14 @@
                   <option value="poor">Poor</option>
                 </select>
               </td>
-              <td><textarea v-model="row.damageNotes" placeholder="Describe damage that needs repair..." rows="2" /></td>
+              <td><textarea v-model="row.damageNotes" placeholder="Describe damage that needs repair..." rows="2" data-col="4" @keydown.enter.prevent="focusNext($event)" /></td>
               <td>
                 <div class="toggle-wrap">
                   <button class="toggle-btn toggle-yes" :class="{ active: row.accessoriesReturned === true }" @click="row.accessoriesReturned = true">YES</button>
                   <button class="toggle-btn toggle-no"  :class="{ active: row.accessoriesReturned === false }" @click="row.accessoriesReturned = false">NO</button>
                 </div>
               </td>
-              <td><textarea v-model="row.remarks" placeholder="Additional remarks..." rows="2" /></td>
+              <td><textarea v-model="row.remarks" placeholder="Additional remarks..." rows="2" data-col="5" @keydown.enter.prevent="focusNext($event)" /></td>
               <td class="actions-cell">
                 <button class="btn btn-sm" :class="row.showBorrowers ? 'borrower-btn-active btn-sm' : 'btn-secondary'"
                   @click="$emit('toggle-borrowers', row)" style="margin-bottom:4px;width:100%">
@@ -335,8 +339,24 @@ function masterAvail(eq) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// CODE INPUT — with duplicate + out-of-stock validation
+// ENTER KEY — move to next column input within the same row
 // ─────────────────────────────────────────────────────────────
+function focusNext(event) {
+  const current = event.target
+  // Walk up to the closest <tr>
+  const tr = current.closest('tr')
+  if (!tr) return
+  // Collect all focusable inputs/selects/textareas with data-col in this row
+  const focusables = Array.from(
+    tr.querySelectorAll('input[data-col], select[data-col], textarea[data-col]')
+  ).filter(el => !el.disabled)
+  const idx = focusables.indexOf(current)
+  if (idx !== -1 && idx < focusables.length - 1) {
+    focusables[idx + 1].focus()
+  }
+}
+
+
 function onCodeInput(row) {
   const code = (row.codeNo || '').trim()
   row._codeError   = ''
