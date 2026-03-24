@@ -66,6 +66,52 @@
         </div>
       </div>
 
+      <!-- Default Condition / Damage / Accessories row -->
+      <div class="form-row form-row--defaults">
+        <!-- Default Condition -->
+        <div class="form-field form-field--sm">
+          <label>Default Condition</label>
+          <select v-model="form.condition" class="f-input" :class="'condition-' + form.condition">
+            <option value="">— None —</option>
+            <option value="excellent">Excellent</option>
+            <option value="good">Good</option>
+            <option value="fair">Fair</option>
+            <option value="poor">Poor</option>
+          </select>
+        </div>
+
+        <!-- Default Damage Notes -->
+        <div class="form-field form-field--xl">
+          <label>Default Damage Notes <span class="f-hint">— pre-filled when code is entered in the daily record</span></label>
+          <input
+            type="text"
+            v-model="form.damageNotes"
+            placeholder="e.g. Minor scratches on body, blade guard loose…"
+            class="f-input"
+          />
+        </div>
+
+        <!-- Default Accessories Returned -->
+        <div class="form-field form-field--sm">
+          <label>Accessories Returned</label>
+          <div class="toggle-wrap-form">
+            <button
+              class="toggle-btn-form toggle-yes"
+              :class="{ active: form.accessoriesReturned === true }"
+              type="button"
+              @click="form.accessoriesReturned = form.accessoriesReturned === true ? null : true"
+            >YES</button>
+            <button
+              class="toggle-btn-form toggle-no"
+              :class="{ active: form.accessoriesReturned === false }"
+              type="button"
+              @click="form.accessoriesReturned = form.accessoriesReturned === false ? null : false"
+            >NO</button>
+            <span v-if="form.accessoriesReturned === null" class="toggle-none-label">Not set</span>
+          </div>
+        </div>
+      </div>
+
       <div class="form-actions">
         <button class="btn btn-primary" @click="commitForm" :disabled="!form.name.trim() || form.codes.length === 0">
           {{ editingId ? '✔ Save Changes' : '＋ Add Equipment' }}
@@ -90,6 +136,9 @@
               <th style="min-width:280px">Code Numbers (one per unit)</th>
               <th style="width:60px; text-align:center">QTY</th>
               <th style="width:100px; text-align:center">Available</th>
+              <th style="width:110px; text-align:center">Condition</th>
+              <th style="min-width:200px">Damage Notes</th>
+              <th style="width:110px; text-align:center">Accessories</th>
               <th style="width:110px; text-align:center">Actions</th>
             </tr>
           </thead>
@@ -133,6 +182,30 @@
                 </span>
               </td>
 
+              <td class="td-condition">
+                <span v-if="eq.condition" class="condition-badge" :class="'condition-' + eq.condition">
+                  {{ eq.condition.charAt(0).toUpperCase() + eq.condition.slice(1) }}
+                </span>
+                <span v-else class="condition-badge condition-unset">—</span>
+              </td>
+
+              <td class="td-damage-notes">
+                <span v-if="eq.damageNotes" class="damage-text">{{ eq.damageNotes }}</span>
+                <span v-else class="damage-none">—</span>
+              </td>
+
+              <td class="td-accessories">
+                <span
+                  v-if="eq.accessoriesReturned === true"
+                  class="acc-badge acc-yes"
+                >YES</span>
+                <span
+                  v-else-if="eq.accessoriesReturned === false"
+                  class="acc-badge acc-no"
+                >NO</span>
+                <span v-else class="acc-badge acc-unset">—</span>
+              </td>
+
               <td class="td-actions">
                 <button class="act-btn act-edit" @click="startEdit(eq)" title="Edit">✏️</button>
                 <button class="act-btn act-del"  @click="confirmDelete(eq)" title="Delete">🗑</button>
@@ -140,7 +213,7 @@
             </tr>
 
             <tr v-if="filtered.length === 0">
-              <td colspan="6" class="empty-row">
+              <td colspan="9" class="empty-row">
                 {{ search ? 'No equipment matches your search.' : 'No equipment yet. Add one above.' }}
               </td>
             </tr>
@@ -213,7 +286,7 @@ const filtered = computed(() => {
 
 // ── Form state ──
 const editingId  = ref(null)
-const form       = ref({ name: '', codes: [] })
+const form       = ref({ name: '', codes: [], condition: '', damageNotes: '', accessoriesReturned: null })
 const codeInput  = ref('')
 
 function pushCode() {
@@ -232,26 +305,40 @@ function commitForm() {
   pushCode() // flush any pending input
   if (!form.value.name.trim() || form.value.codes.length === 0) return
 
+  const payload = {
+    name: form.value.name,
+    codes: form.value.codes,
+    condition: form.value.condition,
+    damageNotes: form.value.damageNotes,
+    accessoriesReturned: form.value.accessoriesReturned,
+  }
+
   if (editingId.value) {
-    updateEquipment(editingId.value, { name: form.value.name, codes: form.value.codes })
+    updateEquipment(editingId.value, payload)
     editingId.value = null
   } else {
-    addEquipment({ name: form.value.name, codes: form.value.codes })
+    addEquipment(payload)
   }
-  form.value = { name: '', codes: [] }
+  form.value = { name: '', codes: [], condition: '', damageNotes: '', accessoriesReturned: null }
   codeInput.value = ''
 }
 
 function startEdit(eq) {
   editingId.value  = eq.id
-  form.value       = { name: eq.name, codes: [...eq.codes] }
+  form.value       = {
+    name: eq.name,
+    codes: [...eq.codes],
+    condition: eq.condition || '',
+    damageNotes: eq.damageNotes || '',
+    accessoriesReturned: eq.accessoriesReturned ?? null,
+  }
   codeInput.value  = ''
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 function cancelEdit() {
   editingId.value = null
-  form.value      = { name: '', codes: [] }
+  form.value      = { name: '', codes: [], condition: '', damageNotes: '', accessoriesReturned: null }
   codeInput.value = ''
 }
 
@@ -734,4 +821,73 @@ const lookupResult = computed(() => lookupCode.value.trim() ? findByCode(lookupC
 }
 
 .result-placeholder { color: var(--muted); font-size: 12px; }
+
+/* ── Default info form row ── */
+.form-row--defaults {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1.5px dashed var(--border);
+}
+
+.form-field--xl { flex: 2; min-width: 240px; }
+.form-field--sm { flex: 0 0 160px; min-width: 130px; }
+
+.toggle-wrap-form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+
+.toggle-btn-form {
+  padding: 6px 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: none;
+  font-size: 11px;
+  font-family: 'Nunito', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--muted);
+}
+.toggle-btn-form.toggle-yes.active { background: rgba(58,122,50,0.1); color: var(--success); border-color: rgba(58,122,50,0.4); }
+.toggle-btn-form.toggle-no.active  { background: rgba(184,50,50,0.08); color: var(--danger); border-color: rgba(184,50,50,0.3); }
+.toggle-none-label { font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace; }
+
+/* ── Table condition / damage / accessories cells ── */
+.td-condition { text-align: center; vertical-align: middle; }
+.condition-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.condition-excellent { background: rgba(58,122,50,0.1);  color: var(--success); border: 1px solid rgba(58,122,50,0.3); }
+.condition-good      { background: rgba(42,96,153,0.08); color: #2a6099; border: 1px solid rgba(42,96,153,0.2); }
+.condition-fair      { background: rgba(138,98,0,0.08);  color: var(--warning); border: 1px solid rgba(138,98,0,0.25); }
+.condition-poor      { background: rgba(184,50,50,0.07); color: var(--danger);  border: 1px solid rgba(184,50,50,0.25); }
+.condition-unset     { background: rgba(0,0,0,0.03); color: var(--muted); border: 1px solid var(--border); }
+
+.td-damage-notes { vertical-align: middle; }
+.damage-text { font-family: 'Nunito', sans-serif; font-size: 12px; color: #000; }
+.damage-none { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 12px; }
+
+.td-accessories { text-align: center; vertical-align: middle; }
+.acc-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+}
+.acc-yes   { background: rgba(58,122,50,0.1); color: var(--success); border: 1px solid rgba(58,122,50,0.3); }
+.acc-no    { background: rgba(184,50,50,0.07); color: var(--danger); border: 1px solid rgba(184,50,50,0.25); }
+.acc-unset { background: rgba(0,0,0,0.03); color: var(--muted); border: 1px solid var(--border); }
 </style>

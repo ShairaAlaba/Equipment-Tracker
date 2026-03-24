@@ -186,7 +186,7 @@
                 </div>
               </td>
 
-              <td><input type="text" v-model="row.remarks" placeholder="Additional remarks..." :disabled="!!row._codeError" /></td>
+              <td><textarea v-model="row.remarks" placeholder="Additional remarks..." rows="2" :disabled="!!row._codeError" /></td>
 
               <td class="actions-cell">
                 <button
@@ -241,7 +241,7 @@
           <template v-for="(row, ri) in rows" :key="row.id">
             <tr class="equip-row">
               <td class="row-num">{{ ri + 1 }}</td>
-              <td><input type="text" v-model="row.codeNo" placeholder="e.g. 8100" class="code-input" /></td>
+              <td><input type="text" v-model="row.codeNo" placeholder="e.g. 8100" class="code-input" @input="onCodeInput(row)" @blur="onCodeInput(row)" /></td>
               <td><input type="text" v-model="row.toolName" placeholder="Tool / Equipment name" /></td>
               <td><input type="number" min="0" v-model.number="row.totalQty" placeholder="0" class="inv-input-old" /></td>
               <td>
@@ -260,7 +260,7 @@
                   <button class="toggle-btn toggle-no"  :class="{ active: row.accessoriesReturned === false }" @click="row.accessoriesReturned = false">NO</button>
                 </div>
               </td>
-              <td><input type="text" v-model="row.remarks" placeholder="Additional remarks..." /></td>
+              <td><textarea v-model="row.remarks" placeholder="Additional remarks..." rows="2" /></td>
               <td class="actions-cell">
                 <button class="btn btn-sm" :class="row.showBorrowers ? 'borrower-btn-active btn-sm' : 'btn-secondary'"
                   @click="$emit('toggle-borrowers', row)" style="margin-bottom:4px;width:100%">
@@ -375,8 +375,13 @@ function onCodeInput(row) {
     return
   }
 
-  // 4. All clear — fill in the name
+  // 4. All clear — fill in the name and auto-fill defaults from master list
   row.toolName = match.name
+  if (match.condition)           row.condition           = match.condition
+  if (match.damageNotes)         row.damageNotes         = match.damageNotes
+  if (match.accessoriesReturned !== null && match.accessoriesReturned !== undefined) {
+    row.accessoriesReturned = match.accessoriesReturned
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
