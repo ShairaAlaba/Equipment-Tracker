@@ -35,6 +35,8 @@
     @load-record="handleLoadRecord"
     @load-record-for-edit="handleLoadRecordForEdit"
     @delete-record="handleDeleteRecord"
+    @update-record="handleUpdateRecord"
+    @rename-record="handleRenameRecord"
   />
 
   <!-- Equipment Master Tab -->
@@ -85,6 +87,8 @@ const {
   saveRecord,
   loadRecord,
   deleteRecord,
+  updateRecord,
+  renameRecord,
   totalBorrowers
 } = useRecords()
 
@@ -130,6 +134,15 @@ function handleLoadRecordForEdit(record) {
 function handleDeleteRecord(date) {
   deleteRecord(date)
   showToast('🗑 Record deleted')
+}
+
+function handleUpdateRecord(updatedRecord) {
+  updateRecord(updatedRecord)
+}
+
+function handleRenameRecord({ oldDate, newDate }) {
+  renameRecord(oldDate, newDate)
+  showToast('📅 Record moved to ' + newDate)
 }
 
 /**

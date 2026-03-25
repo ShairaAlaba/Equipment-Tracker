@@ -67,7 +67,7 @@
             <span class="dot-sep">·</span>
             <span>{{ totalBorrowers(rec) }} borrower{{ totalBorrowers(rec) !== 1 ? 's' : '' }}</span>
           </div>
-          <button class="edit-btn" @click.stop="openRecord(rec)">VIEW</button>
+          <div class="rec-btn-group"><button class="edit-btn" @click.stop="openRecord(rec)">VIEW</button><button class="edit-date-btn" @click.stop="openEditDate(rec)">✏ DATE</button></div>
         </div>
       </div>
     </template>
@@ -111,7 +111,7 @@
               <span class="dot-sep">·</span>
               <span>{{ totalBorrowers(rec) }} borrower{{ totalBorrowers(rec) !== 1 ? 's' : '' }}</span>
             </div>
-            <button class="edit-btn" @click.stop="openRecord(rec)">VIEW</button>
+            <div class="rec-btn-group"><button class="edit-btn" @click.stop="openRecord(rec)">VIEW</button><button class="edit-date-btn" @click.stop="openEditDate(rec)">✏ DATE</button></div>
           </div>
         </div>
       </div>
@@ -156,7 +156,7 @@
               <span class="dot-sep">·</span>
               <span>{{ totalBorrowers(rec) }} borrower{{ totalBorrowers(rec) !== 1 ? 's' : '' }}</span>
             </div>
-            <button class="edit-btn" @click.stop="openRecord(rec)">VIEW</button>
+            <div class="rec-btn-group"><button class="edit-btn" @click.stop="openRecord(rec)">VIEW</button><button class="edit-date-btn" @click.stop="openEditDate(rec)">✏ DATE</button></div>
           </div>
         </div>
       </div>
@@ -201,7 +201,7 @@
               <span class="dot-sep">·</span>
               <span>{{ totalBorrowers(rec) }} borrower{{ totalBorrowers(rec) !== 1 ? 's' : '' }}</span>
             </div>
-            <button class="edit-btn" @click.stop="openRecord(rec)">VIEW</button>
+            <div class="rec-btn-group"><button class="edit-btn" @click.stop="openRecord(rec)">VIEW</button><button class="edit-date-btn" @click.stop="openEditDate(rec)">✏ DATE</button></div>
           </div>
         </div>
       </div>
@@ -440,6 +440,33 @@
   </div>
 
   <!-- ══════════════════════════════════════
+       EDIT DATE MODAL
+  ══════════════════════════════════════ -->
+  <div class="modal-overlay" v-if="editingDate" @click.self="cancelEditDate">
+    <div class="edit-date-modal">
+      <div class="edit-date-header">
+        <span class="edit-date-title">✏️ Change Record Date</span>
+      </div>
+      <div class="edit-date-body">
+        <p class="edit-date-hint">
+          Moving record from <strong>{{ editingDate.rec.date }}</strong> to a new date.<br>
+          <span class="edit-date-sub">If a record already exists on the new date, the data will be merged.</span>
+        </p>
+        <label class="edit-date-label">
+          New Date
+          <input type="date" v-model="editingDate.newDate" class="edit-date-input" />
+        </label>
+      </div>
+      <div class="edit-date-footer">
+        <button class="btn btn-primary btn-sm" @click="saveEditDate" :disabled="!editingDate.newDate">
+          ✔ Save New Date
+        </button>
+        <button class="btn btn-secondary btn-sm" @click="cancelEditDate">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
        BORROWER CARD MODAL (edit from history)
   ══════════════════════════════════════ -->
   <BorrowerCardModal
@@ -463,7 +490,7 @@ const props = defineProps({
   totalBorrowers: { type: Function, required: true }
 })
 
-const emit = defineEmits(['load-record', 'delete-record', 'update-history', 'edit-borrower-in-record', 'load-record-for-edit'])
+const emit = defineEmits(['load-record', 'delete-record', 'update-history', 'edit-borrower-in-record', 'load-record-for-edit', 'update-record', 'rename-record'])
 
 // ── State ──────────────────────────────────────────────────────
 const searchQuery = ref('')
@@ -472,6 +499,28 @@ const viewMode    = ref('all')
 const viewing     = ref(null)
 const editingRow  = ref(null)   // { section, rowIndex, draft }
 const borrowerCard = ref(null)  // { borrower, row, recordDate } — for BorrowerCardModal
+
+// ── Edit Date state ────────────────────────────────────────────
+const editingDate = ref(null)   // { rec, newDate }
+function openEditDate(rec) {
+  editingDate.value = { rec, newDate: rec.date }
+}
+function cancelEditDate() {
+  editingDate.value = null
+}
+function saveEditDate() {
+  const { rec, newDate } = editingDate.value
+  if (!newDate || newDate === rec.date) { editingDate.value = null; return }
+
+  // Check for collision
+  if (props.history.some(r => r.date === newDate)) {
+    if (!confirm(`A record for ${newDate} already exists. Merge the data into it?`)) return
+  }
+
+  emit('rename-record', { oldDate: rec.date, newDate })
+  viewing.value = null
+  editingDate.value = null
+}
 
 // ── Row helpers ────────────────────────────────────────────────
 function sumWithdrawn(row) {
@@ -610,7 +659,7 @@ function confirmDeleteRecord(date) {
 // ── Delete single equipment row from the open record ──────────
 function confirmDeleteRow(section, rowIndex) {
   if (!confirm('Delete this equipment row and all its borrower entries? This cannot be undone.')) return
-  const rec = viewing.value
+  const rec = JSON.parse(JSON.stringify(viewing.value))
   const key = section === 'new' ? 'newEquipRows' : 'oldEquipRows'
   const merged = section === 'new' ? mergedNew.value : mergedOld.value
   const targetRow = merged[rowIndex]
@@ -635,7 +684,7 @@ function startEditRow(section, rowIndex, row) {
 
 function saveEditRow() {
   const { section, draft } = editingRow.value
-  const rec = viewing.value
+  const rec = JSON.parse(JSON.stringify(viewing.value))
   const key = section === 'new' ? 'newEquipRows' : 'oldEquipRows'
   const targetKey = (draft.codeNo || '').trim() + '||' + (draft.toolName || '').trim().toUpperCase()
 
@@ -664,23 +713,22 @@ function editBorrowerInRecord(record, section, rowIndex, borrowerIndex, row, bor
 // Close borrower card and persist any edits back into history
 function closeBorrowerCard() {
   borrowerCard.value = null
-  if (viewing.value) persistAndRefresh(viewing.value)
+  if (viewing.value) persistAndRefresh(JSON.parse(JSON.stringify(viewing.value)))
 }
 
 // Save & move to history from BorrowerCardModal
 function onBorrowerSaveRow() {
   borrowerCard.value = null
-  if (viewing.value) persistAndRefresh(viewing.value)
+  if (viewing.value) persistAndRefresh(JSON.parse(JSON.stringify(viewing.value)))
 }
 
-// ── Persist changes to localStorage and force reactivity ──────
+// ── Persist changes — emit up to App so reactive history updates instantly ──
 function persistAndRefresh(rec) {
-  const idx = props.history.findIndex(r => r.date === rec.date)
-  if (idx !== -1) {
-    props.history[idx] = { ...rec }
-    viewing.value = props.history[idx]
-  }
-  localStorage.setItem('eqt_history', JSON.stringify(props.history))
+  const updated = { ...rec }
+  emit('update-record', updated)
+  // Keep the viewing modal in sync with the updated object
+  // (sortedHistory is a computed — it will re-render, so find the new ref)
+  viewing.value = updated
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1939,9 +1987,116 @@ async function exportGroupExcel(records, reportType, periodLabel) {
   max-height: 90vh;
 }
 
+/* ── Record row button group ── */
+.rec-btn-group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.edit-date-btn {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1.5px solid rgba(42, 96, 153, 0.35);
+  background: rgba(42, 96, 153, 0.07);
+  color: #2a6099;
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.edit-date-btn:hover {
+  background: rgba(42, 96, 153, 0.15);
+  border-color: rgba(42, 96, 153, 0.6);
+}
+
+/* ── Edit Date Modal ── */
+.edit-date-modal {
+  background: #ffffff;
+  border: 1.5px solid var(--border);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.14);
+  animation: slideIn 0.2s ease;
+  overflow: hidden;
+}
+
+.edit-date-header {
+  background: var(--surface2);
+  border-bottom: 1.5px solid var(--border);
+  padding: 16px 22px;
+}
+
+.edit-date-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #000;
+  letter-spacing: 0.5px;
+}
+
+.edit-date-body {
+  padding: 22px 22px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.edit-date-hint {
+  font-family: 'Nunito', sans-serif;
+  font-size: 13px;
+  color: #000;
+  line-height: 1.6;
+}
+
+.edit-date-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.edit-date-label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.edit-date-input {
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 14px;
+  color: #000;
+  background: var(--surface2);
+  outline: none;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+.edit-date-input:focus { border-color: var(--accent); }
+
+.edit-date-footer {
+  padding: 14px 22px 20px;
+  display: flex;
+  gap: 8px;
+  border-top: 1px solid var(--border);
+}
+
 @media print {
   .modal-toolbar { display: none !important; }
   .print-only    { display: flex !important; }
   .no-print      { display: none !important; }
 }
+
 </style>

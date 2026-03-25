@@ -12,13 +12,14 @@ const uid = () => ++_uid
 export function makeRow() {
   return {
     id: uid(),
-    codeNo: '',        // code number typed in the table
+    codeNo: '',
     qty: '',
     toolName: '',
     controlNo: '',
     condition: '',
     damageNotes: '',
-    accessoriesReturned: null, // true | false | null
+    accessoriesReturned: null,
+    accessoriesNotes: '',
     remarks: '',
     showBorrowers: false,
     borrowers: []
@@ -154,6 +155,37 @@ export function useRecords() {
     persistHistory()
   }
 
+  /** Replace an existing record in-place (used by HistoryView inline edits) */
+  function updateRecord(updatedRecord) {
+    const idx = history.value.findIndex(r => r.date === updatedRecord.date)
+    if (idx !== -1) {
+      history.value.splice(idx, 1, { ...updatedRecord })
+    }
+    persistHistory()
+  }
+
+  /** Rename a record's date key — moves it from oldDate to newDate.
+   *  If newDate already exists, merges rows into it and removes oldDate. */
+  function renameRecord(oldDate, newDate) {
+    const srcIdx = history.value.findIndex(r => r.date === oldDate)
+    if (srcIdx === -1) return
+    const src = history.value[srcIdx]
+
+    const destIdx = history.value.findIndex(r => r.date === newDate)
+    if (destIdx !== -1) {
+      // Merge into existing record
+      const dest = history.value[destIdx]
+      dest.newEquipRows = [...(dest.newEquipRows || []), ...(src.newEquipRows || [])]
+      dest.oldEquipRows = [...(dest.oldEquipRows || []), ...(src.oldEquipRows || [])]
+      dest.savedAt = new Date().toISOString()
+      history.value.splice(srcIdx, 1)
+    } else {
+      // Simple rename
+      history.value.splice(srcIdx, 1, { ...src, date: newDate, savedAt: new Date().toISOString() })
+    }
+    persistHistory()
+  }
+
   // ---- Computed helpers ----
   const totalBorrowers = (record) => {
     let count = 0
@@ -222,6 +254,8 @@ export function useRecords() {
     saveRecord,
     loadRecord,
     deleteRecord,
+    updateRecord,
+    renameRecord,
     totalBorrowers
   }
 }

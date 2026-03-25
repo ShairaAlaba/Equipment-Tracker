@@ -1,22 +1,58 @@
 // useEquipmentStore.js
 // ─────────────────────────────────────────────────────────────────────────────
 // Single source of truth for the master equipment list.
-// Both EquipmentTable and EquipmentMaster import from here so they always
-// share the exact same reactive array.
-// Changes are persisted to localStorage so they survive page refreshes.
+// Each equipment entry now tracks per-unit details via a `units` array.
+//
+// Data shape:
+// {
+//   id:    unique string
+//   name:  'TABLE SAW'
+//   qty:   1               ← = units.length (kept in sync)
+//   units: [
+//     {
+//       code:                '8160'
+//       condition:           'good'    ← per-unit condition
+//       damageNotes:         ''        ← per-unit damage description
+//       accessoriesReturned: null      ← true | false | null
+//     }
+//   ]
+// }
+//
+// Legacy shape (flat codes/condition/damageNotes/accessoriesReturned) is
+// automatically migrated to the new shape on load.
 // ─────────────────────────────────────────────────────────────────────────────
 import { ref, watch } from 'vue'
 
-// Each entry:
-// {
-//   id:                   unique string
-//   name:                 'TABLE SAW'
-//   codes:                ['8160']          ← one code per physical unit
-//   qty:                  1                 ← = codes.length (kept in sync)
-//   condition:            'good'            ← default condition (excellent/good/fair/poor)
-//   damageNotes:          ''                ← pre-filled damage description
-//   accessoriesReturned:  null              ← true | false | null
-// }
+function makeUnit(code, condition = '', damageNotes = '', accessoriesReturned = null, accessoriesNotes = '') {
+  return { code: String(code).trim(), condition, damageNotes, accessoriesReturned, accessoriesNotes }
+}
+
+/** Migrate a legacy flat entry to the new per-unit shape, and ensure all unit fields exist */
+function migrate(entry) {
+  if (entry.units && Array.isArray(entry.units)) {
+    // Already new shape — but ensure accessoriesNotes exists on every unit (added later)
+    return {
+      ...entry,
+      units: entry.units.map(u => ({
+        accessoriesNotes: '',   // default for units saved before this field existed
+        ...u,                   // existing fields win (preserves any already-saved value)
+      })),
+    }
+  }
+  const codes = Array.isArray(entry.codes) ? entry.codes : []
+  return {
+    id:    entry.id,
+    name:  entry.name,
+    qty:   codes.length || 1,
+    units: codes.map(c => makeUnit(
+      c,
+      entry.condition           || '',
+      entry.damageNotes         || '',
+      entry.accessoriesReturned ?? null,
+      entry.accessoriesNotes    || '',
+    )),
+  }
+}
 
 const DEFAULT_EQUIPMENT = [
   { id: 'eq-1',  name: 'TABLE SAW',                     codes: ['8160'],                 qty: 1, condition: '', damageNotes: '', accessoriesReturned: null },
@@ -39,20 +75,18 @@ const DEFAULT_EQUIPMENT = [
   { id: 'eq-18', name: 'ELECTRIC GRINDER',               codes: ['8145'],                 qty: 1, condition: '', damageNotes: '', accessoriesReturned: null },
   { id: 'eq-19', name: 'RIVETER GUN (SET)',               codes: ['8150', '8132'],         qty: 2, condition: '', damageNotes: '', accessoriesReturned: null },
   { id: 'eq-20', name: 'AIR SPRAY GUN',                  codes: ['8148'],                 qty: 1, condition: '', damageNotes: '', accessoriesReturned: null },
-]
+].map(migrate)
 
-/** Load from localStorage, fall back to built-in defaults */
 function loadPersistedList() {
   try {
     const saved = localStorage.getItem('eqt_equipment_master')
-    if (saved) return JSON.parse(saved)
+    if (saved) return JSON.parse(saved).map(migrate)
   } catch (e) {
     console.error('Failed to load equipment master from localStorage', e)
   }
   return JSON.parse(JSON.stringify(DEFAULT_EQUIPMENT))
 }
 
-/** Save the current list to localStorage */
 function persistList() {
   try {
     localStorage.setItem('eqt_equipment_master', JSON.stringify(equipmentList.value))
@@ -61,51 +95,56 @@ function persistList() {
   }
 }
 
-// Initialize from localStorage (or defaults) on first load
 const equipmentList = ref(loadPersistedList())
-
-// Auto-persist whenever the list changes (covers add, edit, remove)
 watch(equipmentList, () => { persistList() }, { deep: true })
 
 /** Look up equipment by a single code number. Returns the entry or null. */
 function findByCode(code) {
   const c = String(code).trim()
-  return equipmentList.value.find(eq => eq.codes.includes(c)) || null
+  return equipmentList.value.find(eq => eq.units.some(u => u.code === c)) || null
 }
 
-/** Add a new equipment entry */
-function addEquipment({ name, codes, condition = '', damageNotes = '', accessoriesReturned = null }) {
+/** Find the specific unit object for a given code. Returns { eq, unit } or null. */
+function findUnitByCode(code) {
+  const c = String(code).trim()
+  for (const eq of equipmentList.value) {
+    const unit = eq.units.find(u => u.code === c)
+    if (unit) return { eq, unit }
+  }
+  return null
+}
+
+/** Add a new equipment entry. units = [{ code, condition, damageNotes, accessoriesReturned, accessoriesNotes }] */
+function addEquipment({ name, units }) {
   const id = 'eq-' + Date.now()
-  const cleanCodes = codes.map(c => c.trim()).filter(Boolean)
+  const cleanUnits = units
+    .map(u => makeUnit(u.code, u.condition, u.damageNotes, u.accessoriesReturned, u.accessoriesNotes || ''))
+    .filter(u => u.code)
   equipmentList.value.push({
     id,
     name: name.trim().toUpperCase(),
-    codes: cleanCodes,
-    qty: cleanCodes.length || 1,
-    condition,
-    damageNotes,
-    accessoriesReturned,
+    qty: cleanUnits.length || 1,
+    units: cleanUnits,
   })
 }
 
-/** Remove an entry by id */
 function removeEquipment(id) {
   const idx = equipmentList.value.findIndex(e => e.id === id)
   if (idx !== -1) equipmentList.value.splice(idx, 1)
 }
 
-/** Update an existing entry in-place */
-function updateEquipment(id, { name, codes, condition = '', damageNotes = '', accessoriesReturned = null }) {
+/** Update an existing entry. units = [{ code, condition, damageNotes, accessoriesReturned, accessoriesNotes }] */
+function updateEquipment(id, { name, units }) {
   const entry = equipmentList.value.find(e => e.id === id)
   if (!entry) return
-  entry.name                = name.trim().toUpperCase()
-  entry.codes               = codes.map(c => c.trim()).filter(Boolean)
-  entry.qty                 = entry.codes.length || 1
-  entry.condition           = condition
-  entry.damageNotes         = damageNotes
-  entry.accessoriesReturned = accessoriesReturned
+  const cleanUnits = units
+    .map(u => makeUnit(u.code, u.condition, u.damageNotes, u.accessoriesReturned, u.accessoriesNotes || ''))
+    .filter(u => u.code)
+  entry.name  = name.trim().toUpperCase()
+  entry.units = cleanUnits
+  entry.qty   = cleanUnits.length || 1
 }
 
 export function useEquipmentStore() {
-  return { equipmentList, findByCode, addEquipment, removeEquipment, updateEquipment }
+  return { equipmentList, findByCode, findUnitByCode, addEquipment, removeEquipment, updateEquipment }
 }

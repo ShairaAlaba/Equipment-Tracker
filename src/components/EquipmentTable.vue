@@ -44,7 +44,7 @@
             <!-- Name + codes -->
             <div class="avail-info">
               <div class="avail-name">{{ eq.name }}</div>
-              <div class="avail-codes">{{ (eq.codes || []).join(' · ') }}</div>
+              <div class="avail-codes">{{ (eq.units || []).map(u => u.code).join(' · ') }}</div>
             </div>
 
             <!-- Qty block -->
@@ -68,7 +68,8 @@
 
     <!-- NEW EQUIPMENT TABLE -->
     <div v-if="section === 'new'" class="table-wrap wrap-new">
-      <table class="new-section">
+      <div class="table-scroll-wrap" ref="newTableWrap" @scroll="onNewScroll">
+        <table class="new-section">
         <thead>
           <tr>
             <th style="width:34px">#</th>
@@ -80,6 +81,7 @@
             <th style="min-width:120px">Condition</th>
             <th style="min-width:160px">Damage Notes</th>
             <th style="min-width:114px">Accessories Returned</th>
+            <th style="min-width:160px">Specifies:</th>
             <th style="min-width:160px">Remarks</th>
             <th style="min-width:124px">Actions</th>
           </tr>
@@ -190,7 +192,9 @@
                 </div>
               </td>
 
-              <td><textarea v-model="row.remarks" placeholder="Additional remarks..." rows="2" :disabled="!!row._codeError" data-col="4" @keydown.enter.prevent="focusNext($event)" /></td>
+              <td><textarea v-model="row.accessoriesNotes" placeholder="e.g. charger, blade set…" rows="2" :disabled="!!row._codeError" data-col="4" @keydown.enter.prevent="focusNext($event)" /></td>
+
+              <td><textarea v-model="row.remarks" placeholder="Additional remarks..." rows="2" :disabled="!!row._codeError" data-col="5" @keydown.enter.prevent="focusNext($event)" /></td>
 
               <td class="actions-cell">
                 <button
@@ -223,11 +227,17 @@
           </tr>
         </tbody>
       </table>
+      </div><!-- end table-scroll-wrap -->
+      <!-- Fixed scrollbar pinned to bottom of viewport -->
+      <div class="fixed-scroll-bar" ref="newFixedBar" @scroll="onNewBarScroll">
+        <div class="fixed-scroll-inner" ref="newFixedInner"></div>
+      </div>
     </div>
 
     <!-- OLD / DAMAGED EQUIPMENT TABLE (UNCHANGED) -->
     <div v-if="section === 'old'" class="table-wrap wrap-old">
-      <table class="old-section">
+      <div class="table-scroll-wrap" ref="oldTableWrap" @scroll="onOldScroll">
+        <table class="old-section">
         <thead>
           <tr>
             <th style="width:34px">#</th>
@@ -237,6 +247,7 @@
             <th style="min-width:120px">Condition</th>
             <th style="min-width:170px">Damage Notes</th>
             <th style="min-width:114px">Accessories Returned</th>
+            <th style="min-width:160px">Specifies:</th>
             <th style="min-width:160px">Remarks</th>
             <th style="min-width:124px">Actions</th>
           </tr>
@@ -264,7 +275,8 @@
                   <button class="toggle-btn toggle-no"  :class="{ active: row.accessoriesReturned === false }" @click="row.accessoriesReturned = false">NO</button>
                 </div>
               </td>
-              <td><textarea v-model="row.remarks" placeholder="Additional remarks..." rows="2" data-col="5" @keydown.enter.prevent="focusNext($event)" /></td>
+              <td><textarea v-model="row.accessoriesNotes" placeholder="e.g. charger, blade set…" rows="2" data-col="5" @keydown.enter.prevent="focusNext($event)" /></td>
+              <td><textarea v-model="row.remarks" placeholder="Additional remarks..." rows="2" data-col="6" @keydown.enter.prevent="focusNext($event)" /></td>
               <td class="actions-cell">
                 <button class="btn btn-sm" :class="row.showBorrowers ? 'borrower-btn-active btn-sm' : 'btn-secondary'"
                   @click="$emit('toggle-borrowers', row)" style="margin-bottom:4px;width:100%">
@@ -289,6 +301,11 @@
           </tr>
         </tbody>
       </table>
+      </div><!-- end table-scroll-wrap -->
+      <!-- Fixed scrollbar pinned to bottom of viewport -->
+      <div class="fixed-scroll-bar" ref="oldFixedBar" @scroll="onOldBarScroll">
+        <div class="fixed-scroll-inner" ref="oldFixedInner"></div>
+      </div>
     </div>
 
     <!-- Add Row -->
@@ -302,7 +319,7 @@
 <script setup>
 import BorrowerForm    from './BorrowerForm.vue'
 import BorrowerFormOld from './BorrowerFormOld.vue'
-import { inject, ref } from 'vue'
+import { inject, ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { useEquipmentStore } from '../composables/useEquipmentStore.js'
 
 const props = defineProps({
@@ -314,6 +331,78 @@ const props = defineProps({
 })
 
 defineEmits(['add-row', 'remove-row', 'add-borrower', 'remove-borrower', 'toggle-borrowers', 'save-row'])
+
+// ── Fixed viewport-bottom scrollbar ──────────────────────────
+const newTableWrap  = ref(null)
+const newFixedBar   = ref(null)
+const newFixedInner = ref(null)
+const oldTableWrap  = ref(null)
+const oldFixedBar   = ref(null)
+const oldFixedInner = ref(null)
+
+function setupFixedBar(wrapRef, barRef, innerRef) {
+  const wrap  = wrapRef.value
+  const bar   = barRef.value
+  const inner = innerRef.value
+  if (!wrap || !bar || !inner) return null
+
+  function updateWidth() {
+    inner.style.width = wrap.scrollWidth + 'px'
+    // Position bar to exactly match the wrap's left/width on screen
+    const rect = wrap.getBoundingClientRect()
+    bar.style.left  = rect.left + 'px'
+    bar.style.width = rect.width + 'px'
+  }
+
+  let _fromWrap = false, _fromBar = false
+  function onWrapScroll() {
+    if (_fromBar) { _fromBar = false; return }
+    _fromWrap = true
+    bar.scrollLeft = wrap.scrollLeft
+  }
+  function onBarScroll() {
+    if (_fromWrap) { _fromWrap = false; return }
+    _fromBar = true
+    wrap.scrollLeft = bar.scrollLeft
+  }
+
+  wrap.addEventListener('scroll', onWrapScroll)
+  bar.addEventListener('scroll', onBarScroll)
+
+  updateWidth()
+  const ro = new ResizeObserver(updateWidth)
+  ro.observe(wrap)
+  window.addEventListener('resize', updateWidth)
+  window.addEventListener('scroll', updateWidth)
+
+  return () => {
+    wrap.removeEventListener('scroll', onWrapScroll)
+    bar.removeEventListener('scroll', onBarScroll)
+    ro.disconnect()
+    window.removeEventListener('resize', updateWidth)
+    window.removeEventListener('scroll', updateWidth)
+  }
+}
+
+// Dummy scroll handlers (actual sync set up in onMounted)
+function onNewScroll() {}
+function onNewBarScroll() {}
+function onOldScroll() {}
+function onOldBarScroll() {}
+
+let cleanupNew = null
+let cleanupOld = null
+
+onMounted(async () => {
+  await nextTick()
+  cleanupNew = setupFixedBar(newTableWrap, newFixedBar, newFixedInner)
+  cleanupOld = setupFixedBar(oldTableWrap, oldFixedBar, oldFixedInner)
+})
+
+onUnmounted(() => {
+  if (cleanupNew) cleanupNew()
+  if (cleanupOld) cleanupOld()
+})
 
 // ── Equipment master list (reactive — auto-updates when master list changes) ──
 const { equipmentList, findByCode } = useEquipmentStore()
@@ -395,12 +484,25 @@ function onCodeInput(row) {
     return
   }
 
-  // 4. All clear — fill in the name and auto-fill defaults from master list
+  // 4. All clear — fill in the name and auto-fill per-unit details from master list
   row.toolName = match.name
-  if (match.condition)           row.condition           = match.condition
-  if (match.damageNotes)         row.damageNotes         = match.damageNotes
-  if (match.accessoriesReturned !== null && match.accessoriesReturned !== undefined) {
-    row.accessoriesReturned = match.accessoriesReturned
+
+  // Find the specific unit by code to get per-unit details
+  const unit = match.units ? match.units.find(u => u.code === code) : null
+
+  if (unit) {
+    row.condition           = unit.condition           || ''
+    row.damageNotes         = unit.damageNotes         || ''
+    row.accessoriesReturned = (unit.accessoriesReturned !== null && unit.accessoriesReturned !== undefined)
+                                ? unit.accessoriesReturned : null
+    row.accessoriesNotes    = unit.accessoriesNotes    || ''
+  } else {
+    // Fallback to flat fields (legacy / single-unit)
+    row.condition           = match.condition           || ''
+    row.damageNotes         = match.damageNotes         || ''
+    row.accessoriesReturned = (match.accessoriesReturned !== null && match.accessoriesReturned !== undefined)
+                                ? match.accessoriesReturned : null
+    row.accessoriesNotes    = match.accessoriesNotes    || ''
   }
 }
 
@@ -672,11 +774,44 @@ function fleetAvailable(row) {
 }
 
 .table-wrap {
-  overflow-x: auto;
   border-radius: 14px;
   border: 1.5px solid var(--border);
   box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  overflow: hidden;
+  position: relative;
 }
+
+/* The actual scrollable container — hides its own scrollbar */
+.table-scroll-wrap {
+  overflow-x: auto;
+  overflow-y: visible;
+  /* Hide native scrollbar — we use the fixed one instead */
+  scrollbar-width: none;       /* Firefox */
+  -ms-overflow-style: none;    /* IE/Edge */
+}
+.table-scroll-wrap::-webkit-scrollbar { display: none; }
+
+/* Fixed scrollbar pinned to the bottom of the viewport */
+.fixed-scroll-bar {
+  position: fixed;
+  bottom: 0;
+  z-index: 999;
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: 14px;
+  background: var(--surface2);
+  border-top: 1.5px solid var(--border);
+  /* left and width are set dynamically by JS */
+}
+.fixed-scroll-bar::-webkit-scrollbar { height: 10px; }
+.fixed-scroll-bar::-webkit-scrollbar-track { background: var(--surface2); }
+.fixed-scroll-bar::-webkit-scrollbar-thumb {
+  background: #a0855e;
+  border-radius: 5px;
+  border: 2px solid var(--surface2);
+}
+.fixed-scroll-bar::-webkit-scrollbar-thumb:hover { background: #8a6a4a; }
+.fixed-scroll-inner { height: 1px; }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; background: #ffffff; }
 .new-section { min-width: 1250px; }
