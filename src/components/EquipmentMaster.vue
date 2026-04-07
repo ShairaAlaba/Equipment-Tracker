@@ -4,7 +4,7 @@
     <!-- Page header -->
     <div class="page-header">
       <div>
-        <h2>🗄 Equipment Master List</h2>
+        <h2> Equipment Master List</h2>
         <p>Manage all equipment, code numbers and per-unit details. Changes apply instantly to the Daily Record.</p>
       </div>
       <div class="header-stat">
@@ -158,7 +158,7 @@
     <!-- ── Master table ── -->
     <div class="table-card">
       <div class="table-toolbar">
-        <input type="text" v-model="search" placeholder="🔍  Search equipment or code…" class="search-input" />
+        <input type="text" v-model="search" placeholder="  Search equipment or code…" class="search-input" />
         <span class="total-label">{{ filtered.length }} / {{ equipmentList.length }} shown</span>
       </div>
 
@@ -261,8 +261,8 @@
 
                 <!-- Actions — only on first sub-row -->
                 <td v-if="ui === 0" :rowspan="eq.units.length" class="td-actions">
-                  <button class="act-btn act-edit" @click="startEdit(eq)" title="Edit">✏️</button>
-                  <button class="act-btn act-del"  @click="confirmDelete(eq)" title="Delete">🗑</button>
+                  <button class="act-btn act-edit" @click="startEdit(eq)" title="Edit">Edit</button>
+                  <button class="act-btn act-del"  @click="confirmDelete(eq)" title="Delete">Delete</button>
                 </td>
               </tr>
 
@@ -838,16 +838,16 @@ const lookupResult = computed(() => lookupCode.value.trim() ? findUnitByCode(loo
   z-index: 999;
   overflow-x: auto;
   overflow-y: hidden;
-  height: 14px;
+  height: 20px;
   background: var(--surface2);
   border-top: 1.5px solid var(--border);
   /* left and width set dynamically by JS */
 }
-.fixed-scroll-bar::-webkit-scrollbar { height: 10px; }
+.fixed-scroll-bar::-webkit-scrollbar { height: 16px; }
 .fixed-scroll-bar::-webkit-scrollbar-track { background: var(--surface2); }
 .fixed-scroll-bar::-webkit-scrollbar-thumb {
   background: var(--accent2);
-  border-radius: 5px;
+  border-radius: 8px;
   border: 2px solid var(--surface2);
 }
 .fixed-scroll-bar::-webkit-scrollbar-thumb:hover { background: var(--accent); }

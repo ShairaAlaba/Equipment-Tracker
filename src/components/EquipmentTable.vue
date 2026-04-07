@@ -794,21 +794,21 @@ function fleetAvailable(row) {
 /* Fixed scrollbar pinned to the bottom of the viewport */
 .fixed-scroll-bar {
   position: fixed;
-  bottom: 0;
+  bottom: 58px;
   z-index: 999;
   overflow-x: auto;
   overflow-y: hidden;
-  height: 14px;
+  height: 20px;
   background: var(--surface2);
   border-top: 1.5px solid var(--border);
   /* left and width are set dynamically by JS */
 }
-.fixed-scroll-bar::-webkit-scrollbar { height: 10px; }
+.fixed-scroll-bar::-webkit-scrollbar { height: 16px; }
 .fixed-scroll-bar::-webkit-scrollbar-track { background: var(--surface2); }
 .fixed-scroll-bar::-webkit-scrollbar-thumb {
   background: #a0855e;
-  border-radius: 5px;
-  border: 2px solid var(--surface2);
+  border-radius: 8px;
+  border: -3px solid var(--surface2);
 }
 .fixed-scroll-bar::-webkit-scrollbar-thumb:hover { background: #8a6a4a; }
 .fixed-scroll-inner { height: 1px; }

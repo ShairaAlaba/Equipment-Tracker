@@ -5,21 +5,28 @@
       :class="{ active: activeTab === 'daily' }"
       @click="$emit('change', 'daily')"
     >
-      📝 Daily Record
+      Daily Record
     </button>
     <button
       class="nav-btn"
       :class="{ active: activeTab === 'history' }"
       @click="$emit('change', 'history')"
     >
-      🗂 History
+      History
     </button>
     <button
       class="nav-btn nav-btn--equip"
       :class="{ active: activeTab === 'equipment' }"
       @click="$emit('change', 'equipment')"
     >
-      🗄 Equipment List
+      Equipment List
+    </button>
+    <button
+      class="nav-btn nav-btn--analysis"
+      :class="{ active: activeTab === 'analysis' }"
+      @click="$emit('change', 'analysis')"
+    >
+      Analysis
     </button>
   </nav>
 </template>
@@ -67,5 +74,11 @@ defineEmits(['change'])
 .nav-btn--equip.active {
   color: #2a6099;
   border-bottom-color: #2a6099;
+}
+
+/* Analysis tab — amber/warning tint */
+.nav-btn--analysis.active {
+  color: #7a5200;
+  border-bottom-color: #8a6200;
 }
 </style>

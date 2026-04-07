@@ -338,7 +338,8 @@ const activeSection = ref('new')
   align-items: center;
   justify-content: space-between;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.06);
-  z-index: 10;
+  z-index: 50;
+  min-height: 58px;
 }
 
 .save-info {

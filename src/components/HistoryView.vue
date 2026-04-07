@@ -214,7 +214,7 @@
       <div class="modal-box" ref="modalBox">
 
         <div class="modal-toolbar">
-          <div class="modal-title">📋 Record — {{ viewing.date }}</div>
+          <div class="modal-title"> Record — {{ viewing.date }}</div>
           <div class="modal-actions">
             <button class="btn btn-primary btn-sm"   @click="printSingle(viewing)">🖨 Print</button>
             <button class="btn btn-excel btn-sm"     @click="exportSingleExcel(viewing)">Excel</button>
@@ -1267,116 +1267,419 @@ function printGroup(records, reportType, periodLabel) {
 }
 
 // ══════════════════════════════════════════════════════════════
-// EXCEL EXPORT — uses SheetJS (loaded on demand from CDN)
+// ══════════════════════════════════════════════════════════════
+// EXCEL EXPORT — uses xlsx-js-style (supports full cell styling)
 // ══════════════════════════════════════════════════════════════
 
-/** Lazy-load SheetJS from CDN, resolves with the XLSX global */
+/** Lazy-load xlsx-js-style from CDN, with fallback URLs */
 function loadXLSX() {
   return new Promise((resolve, reject) => {
-    if (window.XLSX) { resolve(window.XLSX); return }
-    const s = document.createElement('script')
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
-    s.onload  = () => resolve(window.XLSX)
-    s.onerror = () => reject(new Error('Failed to load SheetJS'))
-    document.head.appendChild(s)
+    // Already loaded — return immediately
+    if (window.XLSXStyle) { resolve(window.XLSXStyle); return }
+    // Also check if plain XLSX is available (some bundles expose it as window.XLSX)
+    if (window.XLSX && window.XLSX.utils && window.XLSX.writeFile) { resolve(window.XLSX); return }
+
+    const CDN_URLS = [
+      'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js',
+      'https://unpkg.com/xlsx-js-style@1.2.0/dist/xlsx.bundle.js',
+    ]
+
+    function tryLoad(urls) {
+      if (!urls.length) {
+        reject(new Error('Failed to load Excel library from all CDN sources. Check your internet connection.'))
+        return
+      }
+      const [url, ...rest] = urls
+      const s = document.createElement('script')
+      s.src = url
+      s.onload = () => {
+        const lib = window.XLSXStyle || window.XLSX
+        if (lib && lib.utils && lib.writeFile) {
+          resolve(lib)
+        } else {
+          // Script loaded but exposed no usable global — try next URL
+          tryLoad(rest)
+        }
+      }
+      s.onerror = () => tryLoad(rest)
+      document.head.appendChild(s)
+    }
+
+    tryLoad(CDN_URLS)
   })
 }
 
+// ── Shared style definitions ──────────────────────────────────
+
+const S = {
+  // Title row
+  title: {
+    font:      { bold: true, sz: 14, color: { rgb: 'FFFFFF' }, name: 'Calibri' },
+    fill:      { fgColor: { rgb: '3B2A1A' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border:    { bottom: { style: 'medium', color: { rgb: '8A6A4A' } } },
+  },
+  // Column headers
+  header: {
+    font:      { bold: true, sz: 10, color: { rgb: 'FFFFFF' }, name: 'Calibri' },
+    fill:      { fgColor: { rgb: '5C3D1E' } },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border: {
+      top:    { style: 'thin', color: { rgb: '8A6A4A' } },
+      bottom: { style: 'medium', color: { rgb: '8A6A4A' } },
+      left:   { style: 'thin', color: { rgb: '8A6A4A' } },
+      right:  { style: 'thin', color: { rgb: '8A6A4A' } },
+    },
+  },
+  // Section A header row
+  sectionA: {
+    font:      { bold: true, sz: 10, color: { rgb: '3B2A1A' }, name: 'Calibri' },
+    fill:      { fgColor: { rgb: 'F5EDD8' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: {
+      top:    { style: 'medium', color: { rgb: 'A07850' } },
+      bottom: { style: 'thin',   color: { rgb: 'DDC9A8' } },
+      left:   { style: 'medium', color: { rgb: 'A07850' } },
+      right:  { style: 'thin',   color: { rgb: 'DDC9A8' } },
+    },
+  },
+  // Section B header row
+  sectionB: {
+    font:      { bold: true, sz: 10, color: { rgb: '7A1A1A' }, name: 'Calibri' },
+    fill:      { fgColor: { rgb: 'FFF0EE' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: {
+      top:    { style: 'medium', color: { rgb: 'C06050' } },
+      bottom: { style: 'thin',   color: { rgb: 'E8CFC0' } },
+      left:   { style: 'medium', color: { rgb: 'C06050' } },
+      right:  { style: 'thin',   color: { rgb: 'E8CFC0' } },
+    },
+  },
+  // Date group header row
+  dateHeader: {
+    font:      { bold: true, sz: 11, color: { rgb: 'FFFFFF' }, name: 'Calibri' },
+    fill:      { fgColor: { rgb: '8A6A4A' } },
+    alignment: { horizontal: 'left', vertical: 'center' },
+    border: {
+      top:    { style: 'medium', color: { rgb: '5C3D1E' } },
+      bottom: { style: 'medium', color: { rgb: '5C3D1E' } },
+      left:   { style: 'medium', color: { rgb: '5C3D1E' } },
+      right:  { style: 'thin',   color: { rgb: '5C3D1E' } },
+    },
+  },
+  // Normal data cell (even row)
+  dataEven: {
+    font:      { sz: 10, name: 'Calibri' },
+    fill:      { fgColor: { rgb: 'FFFFFF' } },
+    alignment: { vertical: 'center', wrapText: false },
+    border: {
+      bottom: { style: 'thin', color: { rgb: 'EDE5DA' } },
+      left:   { style: 'thin', color: { rgb: 'EDE5DA' } },
+      right:  { style: 'thin', color: { rgb: 'EDE5DA' } },
+    },
+  },
+  // Normal data cell (odd row)
+  dataOdd: {
+    font:      { sz: 10, name: 'Calibri' },
+    fill:      { fgColor: { rgb: 'FDF8F3' } },
+    alignment: { vertical: 'center', wrapText: false },
+    border: {
+      bottom: { style: 'thin', color: { rgb: 'EDE5DA' } },
+      left:   { style: 'thin', color: { rgb: 'EDE5DA' } },
+      right:  { style: 'thin', color: { rgb: 'EDE5DA' } },
+    },
+  },
+  // Returned borrower row
+  returned: {
+    font:      { sz: 10, name: 'Calibri', color: { rgb: '2A7A22' } },
+    fill:      { fgColor: { rgb: 'F0FFF0' } },
+    alignment: { vertical: 'center' },
+    border: {
+      bottom: { style: 'thin', color: { rgb: 'C0E8C0' } },
+      left:   { style: 'thin', color: { rgb: 'C0E8C0' } },
+      right:  { style: 'thin', color: { rgb: 'C0E8C0' } },
+    },
+  },
+  // Code number cell
+  code: {
+    font:      { sz: 10, bold: true, name: 'Courier New', color: { rgb: '8A6A4A' } },
+    fill:      { fgColor: { rgb: 'FDF8F3' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: {
+      bottom: { style: 'thin', color: { rgb: 'EDE5DA' } },
+      left:   { style: 'thin', color: { rgb: 'EDE5DA' } },
+      right:  { style: 'thin', color: { rgb: 'EDE5DA' } },
+    },
+  },
+  // Status YES
+  yes: {
+    font:      { bold: true, sz: 10, color: { rgb: '2A7A22' }, name: 'Calibri' },
+    fill:      { fgColor: { rgb: 'F0FFF0' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: {
+      bottom: { style: 'thin', color: { rgb: 'C0E8C0' } },
+      left:   { style: 'thin', color: { rgb: 'C0E8C0' } },
+      right:  { style: 'thin', color: { rgb: 'C0E8C0' } },
+    },
+  },
+  // Status NO
+  no: {
+    font:      { bold: true, sz: 10, color: { rgb: 'B83232' }, name: 'Calibri' },
+    fill:      { fgColor: { rgb: 'FFF0F0' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: {
+      bottom: { style: 'thin', color: { rgb: 'E8C0C0' } },
+      left:   { style: 'thin', color: { rgb: 'E8C0C0' } },
+      right:  { style: 'thin', color: { rgb: 'E8C0C0' } },
+    },
+  },
+  // Condition badges
+  condExcellent: { font: { bold: true, sz: 10, color: { rgb: '2A7A22' }, name: 'Calibri' }, fill: { fgColor: { rgb: 'F0FFF0' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: { bottom: { style: 'thin', color: { rgb: 'EDE5DA' } }, left: { style: 'thin', color: { rgb: 'EDE5DA' } }, right: { style: 'thin', color: { rgb: 'EDE5DA' } } } },
+  condGood:      { font: { bold: true, sz: 10, color: { rgb: '2A6099' }, name: 'Calibri' }, fill: { fgColor: { rgb: 'F0F4FF' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: { bottom: { style: 'thin', color: { rgb: 'EDE5DA' } }, left: { style: 'thin', color: { rgb: 'EDE5DA' } }, right: { style: 'thin', color: { rgb: 'EDE5DA' } } } },
+  condFair:      { font: { bold: true, sz: 10, color: { rgb: '8A6200' }, name: 'Calibri' }, fill: { fgColor: { rgb: 'FFFAF0' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: { bottom: { style: 'thin', color: { rgb: 'EDE5DA' } }, left: { style: 'thin', color: { rgb: 'EDE5DA' } }, right: { style: 'thin', color: { rgb: 'EDE5DA' } } } },
+  condPoor:      { font: { bold: true, sz: 10, color: { rgb: 'B83232' }, name: 'Calibri' }, fill: { fgColor: { rgb: 'FFF0F0' } }, alignment: { horizontal: 'center', vertical: 'center' }, border: { bottom: { style: 'thin', color: { rgb: 'EDE5DA' } }, left: { style: 'thin', color: { rgb: 'EDE5DA' } }, right: { style: 'thin', color: { rgb: 'EDE5DA' } } } },
+  // Numeric cells
+  num: {
+    font:      { bold: true, sz: 11, name: 'Courier New', color: { rgb: '2A6099' } },
+    fill:      { fgColor: { rgb: 'F0F4FF' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: {
+      bottom: { style: 'thin', color: { rgb: 'EDE5DA' } },
+      left:   { style: 'thin', color: { rgb: 'EDE5DA' } },
+      right:  { style: 'thin', color: { rgb: 'EDE5DA' } },
+    },
+  },
+  // Empty / blank
+  empty: {
+    font:      { sz: 10, color: { rgb: 'AAAAAA' }, name: 'Calibri' },
+    fill:      { fgColor: { rgb: 'FFFFFF' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: {
+      bottom: { style: 'thin', color: { rgb: 'EDE5DA' } },
+      left:   { style: 'thin', color: { rgb: 'EDE5DA' } },
+      right:  { style: 'thin', color: { rgb: 'EDE5DA' } },
+    },
+  },
+}
+
+function condStyle(val) {
+  if (val === 'excellent') return S.condExcellent
+  if (val === 'good')      return S.condGood
+  if (val === 'fair')      return S.condFair
+  if (val === 'poor')      return S.condPoor
+  return S.empty
+}
+
+function fmt12Excel(t) {
+  if (!t) return ''
+  const [hStr, mStr] = t.split(':')
+  let h = parseInt(hStr, 10)
+  const m = mStr || '00'
+  const ampm = h >= 12 ? 'PM' : 'AM'
+  h = h % 12 || 12
+  return `${h}:${m} ${ampm}`
+}
+
 /**
- * Build a flat array of row objects for all equipment rows + borrowers.
- * Each borrower occupies one spreadsheet row.
- * Equipment rows without borrowers still get one row (borrower fields blank).
+ * Build a fully-styled worksheet using cell-by-cell approach.
+ * Structure per record:
+ *   - Date header spanning all columns
+ *   - Section A header + equipment rows + borrower sub-rows
+ *   - Section B header + equipment rows + borrower sub-rows
  */
-function buildSheetRows(records) {
-  const rows = []
+function buildStyledWorksheet(XLSX, records, reportTitle) {
+  const COLS = [
+    { key: 'equip',    label: 'Equipment / Tool',    wch: 28 },
+    { key: 'code',     label: 'Code No.',             wch: 12 },
+    { key: 'qty',      label: 'Total QTY',            wch: 10 },
+    { key: 'cond',     label: 'Condition',            wch: 14 },
+    { key: 'damage',   label: 'Damage Notes',         wch: 28 },
+    { key: 'acc',      label: 'Accessories',          wch: 13 },
+    { key: 'accNotes', label: 'Specifies',            wch: 22 },
+    { key: 'remarks',  label: 'Remarks',              wch: 22 },
+    { key: 'borrower', label: 'Borrower Name',        wch: 22 },
+    { key: 'project',  label: 'Project',              wch: 20 },
+    { key: 'ctrl',     label: 'Control No.',          wch: 14 },
+    { key: 'withdraw', label: 'Withdraw QTY',         wch: 12 },
+    { key: 'condOut',  label: 'Condition (Out)',      wch: 14 },
+    { key: 'dmgOut',   label: 'Checkout Notes',       wch: 24 },
+    { key: 'dateBor',  label: 'Date Borrowed',        wch: 14 },
+    { key: 'timeBor',  label: 'Time Borrowed',        wch: 13 },
+    { key: 'dateRet',  label: 'Return Date',          wch: 13 },
+    { key: 'timeRet',  label: 'Return Time',          wch: 12 },
+    { key: 'condRet',  label: 'Condition (Return)',   wch: 16 },
+    { key: 'dmgRet',   label: 'Return Notes',         wch: 24 },
+    { key: 'returned', label: 'Returned?',            wch: 11 },
+  ]
+  const NC = COLS.length
+
+  const ws = {}
+  let R = 0  // current row (0-based)
+
+  function setCell(r, c, v, style) {
+    const addr = XLSX.utils.encode_cell({ r, c })
+    ws[addr] = { v: v ?? '', t: typeof v === 'number' ? 'n' : 's', s: style }
+  }
+
+  function setRow(r, values, styles) {
+    for (let c = 0; c < NC; c++) {
+      setCell(r, c, values[c] ?? '', styles[c] ?? S.dataEven)
+    }
+  }
+
+  function blankRow(r, style) {
+    for (let c = 0; c < NC; c++) setCell(r, c, '', style ?? S.dataEven)
+  }
+
+  // ── Title row ─────────────────────────────────────────────
+  for (let c = 0; c < NC; c++) setCell(R, c, c === 0 ? reportTitle : '', S.title)
+  ws['!merges'] = ws['!merges'] || []
+  ws['!merges'].push({ s: { r: R, c: 0 }, e: { r: R, c: NC - 1 } })
+  R++
+
+  // ── Column header row ──────────────────────────────────────
+  for (let c = 0; c < NC; c++) setCell(R, c, COLS[c].label, S.header)
+  R++
+
+  let dataRowCount = 0
+
   for (const rec of records) {
+    // ── Date group header ──────────────────────────────────
+    const dateLabel = `📅  Record Date: ${rec.date}`
+    for (let c = 0; c < NC; c++) setCell(R, c, c === 0 ? dateLabel : '', S.dateHeader)
+    ws['!merges'].push({ s: { r: R, c: 0 }, e: { r: R, c: NC - 1 } })
+    R++
+
     const sections = [
-      { label: 'Section A — New/Good', rows: rec.newEquipRows || [] },
-      { label: 'Section B — Old/Damaged', rows: rec.oldEquipRows || [] },
+      { label: '✦  Section A — New / Good Condition Equipment', rows: rec.newEquipRows || [], secStyle: S.sectionA },
+      { label: '⚠  Section B — Old / Damaged Equipment',       rows: rec.oldEquipRows || [], secStyle: S.sectionB },
     ]
+
     for (const sec of sections) {
+      // Section header
+      for (let c = 0; c < NC; c++) setCell(R, c, c === 0 ? sec.label : '', sec.secStyle)
+      ws['!merges'].push({ s: { r: R, c: 0 }, e: { r: R, c: NC - 1 } })
+      R++
+
+      if (!sec.rows.length) {
+        for (let c = 0; c < NC; c++) setCell(R, c, c === 0 ? '— No entries —' : '', S.empty)
+        ws['!merges'].push({ s: { r: R, c: 0 }, e: { r: R, c: NC - 1 } })
+        R++
+        continue
+      }
+
       for (const row of sec.rows) {
         const borrowers = row.borrowers && row.borrowers.length ? row.borrowers : [null]
-        for (const b of borrowers) {
-          rows.push({
-            'Date':               rec.date,
-            'Section':            sec.label,
-            'Equipment / Tool':   row.toolName   || '',
-            'Code No.':           row.codeNo      || '',
-            'Total QTY':          row.qty         || '',
-            'Condition':          row.condition   || '',
-            'Damage Notes':       row.damageNotes || '',
-            'Accessories Returned': row.accessoriesReturned === true ? 'YES'
-                                  : row.accessoriesReturned === false ? 'NO' : '',
-            'Remarks':            row.remarks     || '',
-            'Borrower Name':      b ? (b.name    || '') : '',
-            'Project':            b ? (b.project || '') : '',
-            'Withdraw QTY':       b ? (b.withdraw || 0) : '',
-            'Date Borrowed':      b ? (b.dateBorrowed || '') : '',
-            'Time Borrowed':      b ? (b.timeBorrowed || '') : '',
-            'Checkout Condition': b ? (b.conditionCheckout || '') : '',
-            'Return Date':        b ? (b.returnDate || '') : '',
-            'Return Time':        b ? (b.returnTime || '') : '',
-            'Return Condition':   b ? (b.conditionReturn || '') : '',
-          })
+
+        for (let bi = 0; bi < borrowers.length; bi++) {
+          const b = borrowers[bi]
+          const isRet = b && b.returned
+          const isEven = dataRowCount % 2 === 0
+          const baseStyle = isRet ? S.returned : (isEven ? S.dataEven : S.dataOdd)
+
+          const accVal = row.accessoriesReturned === true ? 'YES'
+                       : row.accessoriesReturned === false ? 'NO' : '—'
+          const accStyle = row.accessoriesReturned === true ? S.yes
+                         : row.accessoriesReturned === false ? S.no : S.empty
+
+          // Only show equipment fields on first borrower row
+          const showEquip = bi === 0
+
+          setCell(R, 0,  showEquip ? (row.toolName || '—')   : '', showEquip ? baseStyle : S.empty)
+          setCell(R, 1,  showEquip ? (row.codeNo   || '—')   : '', showEquip ? S.code    : S.empty)
+          setCell(R, 2,  showEquip ? (row.qty || row.totalQty || '') : '', showEquip ? S.num : S.empty)
+          setCell(R, 3,  showEquip ? (row.condition || '—')  : '', showEquip ? condStyle(row.condition) : S.empty)
+          setCell(R, 4,  showEquip ? (row.damageNotes || '') : '', showEquip ? baseStyle : S.empty)
+          setCell(R, 5,  showEquip ? accVal                  : '', showEquip ? accStyle  : S.empty)
+          setCell(R, 6,  showEquip ? (row.accessoriesNotes || '') : '', showEquip ? baseStyle : S.empty)
+          setCell(R, 7,  showEquip ? (row.remarks || '')     : '', showEquip ? baseStyle : S.empty)
+
+          // Borrower fields
+          setCell(R, 8,  b ? (b.name    || '') : '', baseStyle)
+          setCell(R, 9,  b ? (b.project || '') : '', baseStyle)
+          setCell(R, 10, b ? (b.controlNo || '') : '', baseStyle)
+          setCell(R, 11, b ? (b.withdraw ?? '') : '', b ? S.num : S.empty)
+          setCell(R, 12, b ? (b.conditionCheckout || '') : '', b ? condStyle(b.conditionCheckout) : S.empty)
+          setCell(R, 13, b ? (b.conditionCheckoutNotes || '') : '', baseStyle)
+          setCell(R, 14, b ? (b.dateBorrowed || '') : '', baseStyle)
+          setCell(R, 15, b ? fmt12Excel(b.timeBorrowed) : '', baseStyle)
+          setCell(R, 16, b ? (b.returnDate || '') : '', isRet ? S.returned : baseStyle)
+          setCell(R, 17, b ? fmt12Excel(b.returnTime) : '', isRet ? S.returned : baseStyle)
+          setCell(R, 18, b ? (b.conditionReturn || '') : '', b ? condStyle(b.conditionReturn) : S.empty)
+          setCell(R, 19, b ? (b.conditionReturnNotes || '') : '', baseStyle)
+          setCell(R, 20, isRet ? '✓ Returned' : (b ? '⏳ Out' : ''), isRet ? S.yes : (b ? S.no : S.empty))
+
+          R++
+          dataRowCount++
         }
       }
     }
-  }
-  return rows
-}
 
-/** Style the header row: bold + dark background + white text */
-function styleSheet(ws, XLSX) {
-  const range = XLSX.utils.decode_range(ws['!ref'])
-  for (let C = range.s.c; C <= range.e.c; C++) {
-    const cell = ws[XLSX.utils.encode_cell({ r: 0, c: C })]
-    if (!cell) continue
-    cell.s = {
-      font:      { bold: true, color: { rgb: 'FFFFFF' } },
-      fill:      { fgColor: { rgb: '3B2A1A' } },
-      alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
-    }
+    // Spacer row between records
+    blankRow(R, S.empty)
+    R++
   }
-  // Freeze top row
-  ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft' }
+
+  // Set sheet ref
+  ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: R - 1, c: NC - 1 } })
+
+  // Column widths
+  ws['!cols'] = COLS.map(c => ({ wch: c.wch }))
+
+  // Row heights
+  ws['!rows'] = []
+  ws['!rows'][0] = { hpt: 28 }  // title
+  ws['!rows'][1] = { hpt: 32 }  // headers
+
+  // Freeze top 2 rows
+  ws['!freeze'] = { xSplit: 0, ySplit: 2, topLeftCell: 'A3', activePane: 'bottomLeft' }
+
+  return ws
 }
 
 /** Shared download helper */
-async function downloadExcel(records, filename, sheetName) {
+async function downloadExcel(records, filename, reportTitle) {
   let XLSX
-  try { XLSX = await loadXLSX() }
-  catch { alert('Could not load Excel library. Check your internet connection.'); return }
+  try {
+    XLSX = await loadXLSX()
+  } catch (e) {
+    alert('Could not load Excel library.\n\n' + e.message)
+    return
+  }
 
-  const data  = buildSheetRows(records)
-  if (!data.length) { alert('No data to export.'); return }
+  if (!XLSX || !XLSX.utils || !XLSX.writeFile) {
+    alert('Excel library failed to initialize. Please check your internet connection and try again.')
+    return
+  }
 
-  const ws = XLSX.utils.json_to_sheet(data)
+  if (!records || !records.length) {
+    alert('No data to export.')
+    return
+  }
 
-  // Auto column widths
-  const colWidths = Object.keys(data[0]).map(key => ({
-    wch: Math.max(key.length, ...data.map(r => String(r[key] ?? '').length)) + 2
-  }))
-  ws['!cols'] = colWidths
-
-  styleSheet(ws, XLSX)
-
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31))
-  XLSX.writeFile(wb, filename)
+  try {
+    const ws = buildStyledWorksheet(XLSX, records, reportTitle)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, reportTitle.slice(0, 31))
+    XLSX.writeFile(wb, filename)
+  } catch (e) {
+    console.error('Excel export error:', e)
+    alert('Export failed: ' + e.message + '\n\nCheck the browser console for details.')
+  }
 }
 
 /** Export a single day record */
 async function exportSingleExcel(rec) {
-  await downloadExcel([rec], `Equipment_Record_${rec.date}.xlsx`, rec.date)
+  await downloadExcel([rec], `Equipment_Record_${rec.date}.xlsx`, `Record — ${rec.date}`)
 }
 
 /** Export a group of records (weekly / monthly / yearly) */
 async function exportGroupExcel(records, reportType, periodLabel) {
   const safeName = periodLabel.replace(/[^a-zA-Z0-9_\-]/g, '_')
   const safeType = reportType.replace(/\s+/g, '_')
-  await downloadExcel(records, `${safeType}_${safeName}.xlsx`, periodLabel.slice(0, 31))
+  await downloadExcel(records, `${safeType}_${safeName}.xlsx`, `${reportType}: ${periodLabel}`)
 }
+
 </script>
 
 <style scoped>

@@ -42,6 +42,13 @@
   <!-- Equipment Master Tab -->
   <EquipmentMaster v-if="tab === 'equipment'" />
 
+  <!-- Analysis Tab -->
+  <AnalysisView
+    v-if="tab === 'analysis'"
+    :history="sortedHistory"
+    @go-to-record="handleGoToRecord"
+  />
+
   <!-- Toast notification -->
   <Transition name="toast-fade">
     <div class="toast" v-if="toastMsg">{{ toastMsg }}</div>
@@ -57,6 +64,7 @@ import AppNav      from './components/AppNav.vue'
 import DailyRecord from './components/DailyRecord.vue'
 import HistoryView from './components/HistoryView.vue'
 import EquipmentMaster from './components/EquipmentMaster.vue'
+import AnalysisView from './components/AnalysisView.vue'
 
 // Composable
 import { useRecords } from './composables/useRecords.js'
@@ -143,6 +151,19 @@ function handleUpdateRecord(updatedRecord) {
 function handleRenameRecord({ oldDate, newDate }) {
   renameRecord(oldDate, newDate)
   showToast('📅 Record moved to ' + newDate)
+}
+
+function handleGoToRecord({ date, section, codeNo, toolName }) {
+  // Load the history record for that date into the Daily Record view
+  const record = history.value.find(r => r.date === date)
+  if (record) {
+    loadRecord(record)
+  } else {
+    // No saved record — just switch to that date
+    switchToDate(date)
+  }
+  tab.value = 'daily'
+  showToast('✏️ Editing ' + (toolName || codeNo) + ' — ' + date)
 }
 
 /**
