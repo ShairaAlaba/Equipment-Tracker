@@ -1,18 +1,27 @@
 // src/composables/useRecords.js
 // ============================================================
-//  Central state & business logic for the Equipment Tracker
+// Central state & business logic for Equipment Tracker
+// - Real-time Firestore sync
+// - LocalStorage fallback
+// - Shared singleton state
 // ============================================================
 
 import { ref, computed, watch } from 'vue'
 import { db } from '../firebase'
 import {
-  collection, doc, getDocs, setDoc, deleteDoc
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot
 } from 'firebase/firestore'
+
+const HISTORY_COL = 'records'
 
 let _uid = 0
 const uid = () => ++_uid
 
-// ---- Factory: blank equipment row ----
+// ── Factory: blank equipment row ──
 export function makeRow() {
   return {
     id: uid(),
@@ -30,7 +39,7 @@ export function makeRow() {
   }
 }
 
-// ---- Factory: blank borrower entry ----
+// ── Factory: blank borrower ──
 export function makeBorrower() {
   return {
     id: uid(),
@@ -49,186 +58,241 @@ export function makeBorrower() {
   }
 }
 
-export function useRecords() {
-  const recordDate = ref(new Date().toISOString().slice(0, 10))
-  const newEquipRows = ref([makeRow()])
-  const oldEquipRows = ref([makeRow()])
-  const history = ref([])
+// ─────────────────────────────────────
+// 🔥 SHARED STATE (IMPORTANT)
+// ─────────────────────────────────────
+const recordDate = ref(new Date().toISOString().slice(0, 10))
+const newEquipRows = ref([makeRow()])
+const oldEquipRows = ref([makeRow()])
+const history = ref([])
+const historySyncStatus = ref('connecting')
 
-  // ---- Load all records from Firestore ----
-  async function loadHistory() {
-    try {
-      const snapshot = await getDocs(collection(db, 'records'))
-      history.value = snapshot.docs.map(doc => doc.data())
-    } catch (e) {
-      console.error('Failed to load history from Firestore', e)
-    }
+// ─────────────────────────────────────
+// 🔥 FIRESTORE REAL-TIME LISTENER
+// ─────────────────────────────────────
+const colRef = collection(db, HISTORY_COL)
 
-    // Still restore active draft from localStorage
-    try {
-      const savedActive = localStorage.getItem('eqt_active_record')
-      if (savedActive) {
-        const active = JSON.parse(savedActive)
-        if (active.recordDate) recordDate.value = active.recordDate
-        if (active.newEquipRows?.length) newEquipRows.value = active.newEquipRows
-        if (active.oldEquipRows?.length) oldEquipRows.value = active.oldEquipRows
-      }
-    } catch (e) {
-      console.error('Failed to load active record', e)
-    }
-  }
-
-  function persistActive() {
-    localStorage.setItem('eqt_active_record', JSON.stringify({
-      recordDate: recordDate.value,
-      newEquipRows: JSON.parse(JSON.stringify(newEquipRows.value)),
-      oldEquipRows: JSON.parse(JSON.stringify(oldEquipRows.value)),
+onSnapshot(
+  colRef,
+  (snapshot) => {
+    history.value = snapshot.docs.map(d => ({
+      ...d.data(),
+      date: d.id
     }))
+    historySyncStatus.value = 'synced'
+    _persistHistoryLocal()
+  },
+  (err) => {
+    console.error('Firestore error:', err)
+    historySyncStatus.value = 'error'
+    _loadHistoryLocal()
   }
+)
 
-  // ---- Row operations ----
-  function addRow(section) {
-    if (section === 'new') newEquipRows.value.push(makeRow())
-    else oldEquipRows.value.push(makeRow())
-    persistActive()
+// ─────────────────────────────────────
+// 📦 LOCAL STORAGE (fallback)
+// ─────────────────────────────────────
+function _loadHistoryLocal() {
+  try {
+    const saved = localStorage.getItem('eqt_history')
+    if (saved) history.value = JSON.parse(saved)
+  } catch (e) {
+    console.error('Local load error', e)
   }
+}
 
-  function removeRow(section, index) {
-    if (section === 'new') newEquipRows.value.splice(index, 1)
-    else oldEquipRows.value.splice(index, 1)
-    persistActive()
-  }
+function _persistHistoryLocal() {
+  localStorage.setItem('eqt_history', JSON.stringify(history.value))
+}
 
-  function clearAll() {
-    newEquipRows.value = [makeRow()]
-    oldEquipRows.value = [makeRow()]
-    localStorage.removeItem('eqt_active_record')
-  }
-
-  // ---- Borrower operations ----
-  function toggleBorrowers(row) { row.showBorrowers = !row.showBorrowers }
-  function addBorrower(row) { row.borrowers.push(makeBorrower()); row.showBorrowers = true }
-  function removeBorrower(row, index) { row.borrowers.splice(index, 1) }
-
-  // ---- Save to Firestore ----
-  async function saveRecord() {
-    const record = {
-      date: recordDate.value,
-      savedAt: new Date().toISOString(),
-      newEquipRows: JSON.parse(JSON.stringify(newEquipRows.value)),
-      oldEquipRows: JSON.parse(JSON.stringify(oldEquipRows.value))
+function _loadActiveLocal() {
+  try {
+    const saved = localStorage.getItem('eqt_active_record')
+    if (saved) {
+      const active = JSON.parse(saved)
+      recordDate.value = active.recordDate || recordDate.value
+      if (active.newEquipRows?.length) newEquipRows.value = active.newEquipRows
+      if (active.oldEquipRows?.length) oldEquipRows.value = active.oldEquipRows
     }
-    try {
-      await setDoc(doc(db, 'records', record.date), record)
-      const idx = history.value.findIndex(r => r.date === record.date)
-      if (idx >= 0) history.value[idx] = record
-      else history.value.push(record)
-      persistActive()
-    } catch (e) {
-      console.error('Failed to save record to Firestore', e)
-    }
-    return record
+  } catch (e) {
+    console.error('Active load error', e)
+  }
+}
+
+function _persistActiveLocal() {
+  localStorage.setItem('eqt_active_record', JSON.stringify({
+    recordDate: recordDate.value,
+    newEquipRows: JSON.parse(JSON.stringify(newEquipRows.value)),
+    oldEquipRows: JSON.parse(JSON.stringify(oldEquipRows.value))
+  }))
+}
+
+// ─────────────────────────────────────
+// 🔥 FIRESTORE WRITE HELPERS
+// ─────────────────────────────────────
+async function _writeRecord(record) {
+  _persistHistoryLocal()
+  try {
+    await setDoc(doc(db, HISTORY_COL, record.date), record)
+  } catch (e) {
+    console.error('Write failed:', e)
+    historySyncStatus.value = 'error'
+  }
+}
+
+async function _deleteRecord(date) {
+  try {
+    await deleteDoc(doc(db, HISTORY_COL, date))
+  } catch (e) {
+    console.error('Delete failed:', e)
+    historySyncStatus.value = 'error'
+  }
+}
+
+// ─────────────────────────────────────
+// INIT
+// ─────────────────────────────────────
+function loadHistory() {
+  _loadActiveLocal()
+}
+
+// ─────────────────────────────────────
+// ROW OPERATIONS
+// ─────────────────────────────────────
+function addRow(section) {
+  if (section === 'new') newEquipRows.value.push(makeRow())
+  else oldEquipRows.value.push(makeRow())
+  _persistActiveLocal()
+}
+
+function removeRow(section, index) {
+  if (section === 'new') newEquipRows.value.splice(index, 1)
+  else oldEquipRows.value.splice(index, 1)
+  _persistActiveLocal()
+}
+
+function clearAll() {
+  newEquipRows.value = [makeRow()]
+  oldEquipRows.value = [makeRow()]
+  localStorage.removeItem('eqt_active_record')
+}
+
+// ─────────────────────────────────────
+// BORROWERS
+// ─────────────────────────────────────
+function toggleBorrowers(row) { row.showBorrowers = !row.showBorrowers }
+function addBorrower(row) { row.borrowers.push(makeBorrower()); row.showBorrowers = true }
+function removeBorrower(row, index) { row.borrowers.splice(index, 1) }
+
+// ─────────────────────────────────────
+// SAVE / LOAD
+// ─────────────────────────────────────
+async function saveRecord() {
+  const record = {
+    date: recordDate.value,
+    savedAt: new Date().toISOString(),
+    newEquipRows: JSON.parse(JSON.stringify(newEquipRows.value)),
+    oldEquipRows: JSON.parse(JSON.stringify(oldEquipRows.value))
   }
 
-  function loadRecord(record) {
-    recordDate.value = record.date
-    newEquipRows.value = JSON.parse(JSON.stringify(record.newEquipRows))
-    oldEquipRows.value = JSON.parse(JSON.stringify(record.oldEquipRows))
-    persistActive()
+  const idx = history.value.findIndex(r => r.date === record.date)
+  if (idx >= 0) history.value[idx] = record
+  else history.value.push(record)
+
+  _persistActiveLocal()
+  await _writeRecord(record)
+
+  return record
+}
+
+function loadRecord(record) {
+  recordDate.value = record.date
+  newEquipRows.value = JSON.parse(JSON.stringify(record.newEquipRows))
+  oldEquipRows.value = JSON.parse(JSON.stringify(record.oldEquipRows))
+  _persistActiveLocal()
+}
+
+// ─────────────────────────────────────
+// DELETE / UPDATE / RENAME
+// ─────────────────────────────────────
+async function deleteRecord(date) {
+  history.value = history.value.filter(r => r.date !== date)
+  await _deleteRecord(date)
+}
+
+async function updateRecord(updatedRecord) {
+  const idx = history.value.findIndex(r => r.date === updatedRecord.date)
+  if (idx !== -1) history.value.splice(idx, 1, updatedRecord)
+  await _writeRecord(updatedRecord)
+}
+
+async function renameRecord(oldDate, newDate) {
+  const src = history.value.find(r => r.date === oldDate)
+  if (!src) return
+
+  const existing = history.value.find(r => r.date === newDate)
+
+  if (existing) {
+    existing.newEquipRows.push(...src.newEquipRows)
+    existing.oldEquipRows.push(...src.oldEquipRows)
+    await _writeRecord(existing)
+  } else {
+    const renamed = { ...src, date: newDate }
+    await _writeRecord(renamed)
   }
 
-  // ---- Delete from Firestore ----
-  async function deleteRecord(date) {
-    try {
-      await deleteDoc(doc(db, 'records', date))
-      history.value = history.value.filter(r => r.date !== date)
-    } catch (e) {
-      console.error('Failed to delete record from Firestore', e)
-    }
-  }
+  await _deleteRecord(oldDate)
+}
 
-  // ---- Update in Firestore ----
-  async function updateRecord(updatedRecord) {
-    try {
-      await setDoc(doc(db, 'records', updatedRecord.date), updatedRecord)
-      const idx = history.value.findIndex(r => r.date === updatedRecord.date)
-      if (idx !== -1) history.value.splice(idx, 1, { ...updatedRecord })
-    } catch (e) {
-      console.error('Failed to update record in Firestore', e)
-    }
-  }
+// ─────────────────────────────────────
+// COMPUTED
+// ─────────────────────────────────────
+const sortedHistory = computed(() =>
+  [...history.value].sort((a, b) => b.date.localeCompare(a.date))
+)
 
-  // ---- Rename in Firestore ----
-  async function renameRecord(oldDate, newDate) {
-    const srcIdx = history.value.findIndex(r => r.date === oldDate)
-    if (srcIdx === -1) return
-    const src = history.value[srcIdx]
-    const destIdx = history.value.findIndex(r => r.date === newDate)
+const savedDates = computed(() => new Set(history.value.map(r => r.date)))
 
-    try {
-      if (destIdx !== -1) {
-        const dest = history.value[destIdx]
-        dest.newEquipRows = [...(dest.newEquipRows || []), ...(src.newEquipRows || [])]
-        dest.oldEquipRows = [...(dest.oldEquipRows || []), ...(src.oldEquipRows || [])]
-        dest.savedAt = new Date().toISOString()
-        await setDoc(doc(db, 'records', newDate), dest)
-        await deleteDoc(doc(db, 'records', oldDate))
-        history.value.splice(srcIdx, 1)
-      } else {
-        const renamed = { ...src, date: newDate, savedAt: new Date().toISOString() }
-        await setDoc(doc(db, 'records', newDate), renamed)
-        await deleteDoc(doc(db, 'records', oldDate))
-        history.value.splice(srcIdx, 1, renamed)
-      }
-    } catch (e) {
-      console.error('Failed to rename record in Firestore', e)
-    }
-  }
+const hasDraft = computed(() => {
+  const hasData = rows => rows.some(r => r.codeNo || r.toolName || r.borrowers.length)
+  return hasData(newEquipRows.value) || hasData(oldEquipRows.value)
+})
 
-  // ---- Computed helpers ----
-  const totalBorrowers = (record) => {
-    let count = 0
-    ;[...(record.newEquipRows || []), ...(record.oldEquipRows || [])].forEach(
-      r => (count += (r.borrowers || []).length)
-    )
-    return count
-  }
+const totalBorrowers = (record) => {
+  let count = 0
+  ;[...(record.newEquipRows || []), ...(record.oldEquipRows || [])]
+    .forEach(r => count += (r.borrowers || []).length)
+  return count
+}
 
-  watch([recordDate, newEquipRows, oldEquipRows], () => {
-    persistActive()
-  }, { deep: true })
+// ── AUTO SAVE DRAFT
+watch([recordDate, newEquipRows, oldEquipRows], _persistActiveLocal, { deep: true })
 
-  const sortedHistory = computed(() =>
-    [...history.value].sort((a, b) => b.date.localeCompare(a.date))
-  )
-
-  const savedDates = computed(() => new Set(history.value.map(r => r.date)))
-
-  const hasDraft = computed(() => {
-    const hasData = rows => rows.some(r => r.codeNo || r.toolName || r.borrowers.length > 0)
-    return hasData(newEquipRows.value) || hasData(oldEquipRows.value)
-  })
-
-  function switchToDate(date) {
-    const existing = history.value.find(r => r.date === date)
-    if (existing) {
-      recordDate.value = existing.date
-      newEquipRows.value = JSON.parse(JSON.stringify(existing.newEquipRows || [makeRow()]))
-      oldEquipRows.value = JSON.parse(JSON.stringify(existing.oldEquipRows || [makeRow()]))
-      if (!newEquipRows.value.length) newEquipRows.value = [makeRow()]
-      if (!oldEquipRows.value.length) oldEquipRows.value = [makeRow()]
-    } else {
-      recordDate.value = date
-      newEquipRows.value = [makeRow()]
-      oldEquipRows.value = [makeRow()]
-    }
-    persistActive()
-  }
-
+// ─────────────────────────────────────
+// EXPORT
+// ─────────────────────────────────────
+export function useRecords() {
   return {
-    recordDate, newEquipRows, oldEquipRows, history, sortedHistory,
-    savedDates, hasDraft, loadHistory, switchToDate, addRow, removeRow,
-    clearAll, toggleBorrowers, addBorrower, removeBorrower, saveRecord,
-    loadRecord, deleteRecord, updateRecord, renameRecord, totalBorrowers
+    recordDate,
+    newEquipRows,
+    oldEquipRows,
+    history,
+    sortedHistory,
+    savedDates,
+    hasDraft,
+    historySyncStatus,
+    loadHistory,
+    addRow,
+    removeRow,
+    clearAll,
+    toggleBorrowers,
+    addBorrower,
+    removeBorrower,
+    saveRecord,
+    loadRecord,
+    deleteRecord,
+    updateRecord,
+    renameRecord,
+    totalBorrowers
   }
 }

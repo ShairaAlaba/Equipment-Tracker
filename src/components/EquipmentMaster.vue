@@ -7,9 +7,15 @@
         <h2> Equipment Master List</h2>
         <p>Manage all equipment, code numbers and per-unit details. Changes apply instantly to the Daily Record.</p>
       </div>
-      <div class="header-stat">
-        <span class="stat-num">{{ equipmentList.length }}</span>
-        <span class="stat-lbl">Equipment Types</span>
+      <div class="header-right">
+        <div class="sync-badge" :class="'sync-' + syncStatus" :title="syncStatus === 'synced' ? 'Live — changes sync to all devices instantly' : syncStatus === 'connecting' ? 'Connecting to sync server…' : 'Sync error — working offline'">
+          <span class="sync-dot"></span>
+          <span class="sync-label">{{ syncStatus === 'synced' ? 'Live Sync' : syncStatus === 'connecting' ? 'Connecting…' : 'Offline' }}</span>
+        </div>
+        <div class="header-stat">
+          <span class="stat-num">{{ equipmentList.length }}</span>
+          <span class="stat-lbl">Equipment Types</span>
+        </div>
       </div>
     </div>
 
@@ -327,7 +333,7 @@
 import { ref, computed, inject, onMounted, onUnmounted, nextTick } from 'vue'
 import { useEquipmentStore } from '../composables/useEquipmentStore.js'
 
-const { equipmentList, findUnitByCode, addEquipment, removeEquipment, updateEquipment } = useEquipmentStore()
+const { equipmentList, syncStatus, findUnitByCode, addEquipment, removeEquipment, updateEquipment } = useEquipmentStore()
 
 // Receive all equipment rows from parent via provide/inject
 const allEquipRows = inject('allEquipRows', ref([]))
@@ -526,6 +532,43 @@ const lookupResult = computed(() => lookupCode.value.trim() ? findUnitByCode(loo
   font-size: 12px;
   color: var(--muted);
 }
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.sync-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: default;
+  user-select: none;
+}
+.sync-synced    { background: rgba(42,122,34,0.1);  color: #2a7a22; border: 1.5px solid rgba(42,122,34,0.3); }
+.sync-connecting{ background: rgba(42,96,153,0.08); color: #2a6099; border: 1.5px solid rgba(42,96,153,0.2); }
+.sync-error     { background: rgba(184,50,50,0.08); color: #b83232; border: 1.5px solid rgba(184,50,50,0.25); }
+
+.sync-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sync-synced .sync-dot     { background: #2a7a22; box-shadow: 0 0 5px rgba(42,122,34,0.7); animation: pulse-green 2s infinite; }
+.sync-connecting .sync-dot { background: #2a6099; animation: pulse-blue 1s infinite; }
+.sync-error .sync-dot      { background: #b83232; }
+
+@keyframes pulse-green { 0%,100% { opacity:1 } 50% { opacity:0.4 } }
+@keyframes pulse-blue  { 0%,100% { opacity:1 } 50% { opacity:0.3 } }
 
 .header-stat {
   text-align: center;

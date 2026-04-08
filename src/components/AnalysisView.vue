@@ -329,7 +329,8 @@ const allUnreturned = computed(() => {
     for (const { key, section } of sections) {
       for (const row of (record[key] || [])) {
         for (const borrower of (row.borrowers || [])) {
-          if (!borrower.returned) {
+          const hasReturnDateTime = !!(borrower.returnDate && borrower.returnTime)
+          if (!borrower.returned && !hasReturnDateTime) {
             const days = daysOut(borrower.dateBorrowed)
             rows.push({
               _key:       record.date + '-' + row.id + '-' + borrower.id,
