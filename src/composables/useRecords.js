@@ -271,8 +271,27 @@ watch([recordDate, newEquipRows, oldEquipRows], _persistActiveLocal, { deep: tru
 // ─────────────────────────────────────
 // EXPORT
 // ─────────────────────────────────────
+
+// -----------------------------------------
+// SWITCH DATE
+// -----------------------------------------
+function switchToDate(date) {
+  const existing = history.value.find(r => r.date === date)
+  if (existing) {
+    recordDate.value   = existing.date
+    newEquipRows.value = JSON.parse(JSON.stringify(existing.newEquipRows?.length ? existing.newEquipRows : [makeRow()]))
+    oldEquipRows.value = JSON.parse(JSON.stringify(existing.oldEquipRows?.length ? existing.oldEquipRows : [makeRow()]))
+  } else {
+    recordDate.value   = date
+    newEquipRows.value = [makeRow()]
+    oldEquipRows.value = [makeRow()]
+  }
+  _persistActiveLocal()
+}
+
 export function useRecords() {
   return {
+    switchToDate,
     recordDate,
     newEquipRows,
     oldEquipRows,
