@@ -1,80 +1,111 @@
 <template>
   <!-- ============================================================
-    App.vue — Root component
-    Coordinates: navigation, daily record view, history view,
-    toast notifications, and the useRecords composable.
+    App.vue — Root component (FUSED VERSION)
+    Routes between: Landing Page → Equipment Tracker / PPE System
   ============================================================ -->
 
-  <AppHeader :record-date="recordDate" />
-  <AppNav :active-tab="tab" @change="tab = $event" />
-
-  <!-- Daily Record Tab -->
-  <DailyRecord
-    v-if="tab === 'daily'"
-    v-model:record-date="recordDate"
-    :new-equip-rows="newEquipRows"
-    :old-equip-rows="oldEquipRows"
-    :saved-dates="savedDates"
-    :has-draft="hasDraft"
-    @switch-date="handleSwitchDate"
-    @save="handleSave"
-    @clear-all="clearAll"
-    @add-row="addRow"
-    @remove-row="removeRow"
-    @toggle-borrowers="toggleBorrowers"
-    @add-borrower="addBorrower"
-    @remove-borrower="removeBorrower"
-    @save-row="handleSaveRow"
+  <!-- ════════════════════════════════
+       LANDING PAGE
+  ════════════════════════════════ -->
+  <LandingPage
+    v-if="currentSystem === 'landing'"
+    @go="navigateTo"
   />
 
-  <!-- History Tab -->
-  <HistoryView
-    v-if="tab === 'history'"
-    :history="sortedHistory"
-    :total-borrowers="totalBorrowers"
-    @load-record="handleLoadRecord"
-    @load-record-for-edit="handleLoadRecordForEdit"
-    @delete-record="handleDeleteRecord"
-    @update-record="handleUpdateRecord"
-    @rename-record="handleRenameRecord"
+  <!-- ════════════════════════════════
+       PPE SYSTEM
+  ════════════════════════════════ -->
+  <PPESystem
+    v-else-if="currentSystem === 'ppe'"
+    @back="currentSystem = 'landing'"
   />
 
-  <!-- Equipment Master Tab -->
-  <EquipmentMaster v-if="tab === 'equipment'" />
+  <!-- ════════════════════════════════
+       EQUIPMENT TRACKER (original)
+  ════════════════════════════════ -->
+  <template v-else-if="currentSystem === 'equipment'">
+    <AppHeader :record-date="recordDate" @back="currentSystem = 'landing'" :show-back="true" />
+    <AppNav :active-tab="tab" @change="tab = $event" />
 
-  <!-- Analysis Tab -->
-  <AnalysisView
-    v-if="tab === 'analysis'"
-    :history="sortedHistory"
-    @go-to-record="handleGoToRecord"
-  />
+    <!-- Daily Record Tab -->
+    <DailyRecord
+      v-if="tab === 'daily'"
+      v-model:record-date="recordDate"
+      :new-equip-rows="newEquipRows"
+      :old-equip-rows="oldEquipRows"
+      :saved-dates="savedDates"
+      :has-draft="hasDraft"
+      @switch-date="handleSwitchDate"
+      @save="handleSave"
+      @clear-all="clearAll"
+      @add-row="addRow"
+      @remove-row="removeRow"
+      @toggle-borrowers="toggleBorrowers"
+      @add-borrower="addBorrower"
+      @remove-borrower="removeBorrower"
+      @save-row="handleSaveRow"
+    />
 
-  <!-- Toast notification -->
-  <Transition name="toast-fade">
-    <div class="toast" v-if="toastMsg">{{ toastMsg }}</div>
-  </Transition>
+    <!-- History Tab -->
+    <HistoryView
+      v-if="tab === 'history'"
+      :history="sortedHistory"
+      :total-borrowers="totalBorrowers"
+      @load-record="handleLoadRecord"
+      @load-record-for-edit="handleLoadRecordForEdit"
+      @delete-record="handleDeleteRecord"
+      @update-record="handleUpdateRecord"
+      @rename-record="handleRenameRecord"
+    />
+
+    <!-- Equipment Master Tab -->
+    <EquipmentMaster v-if="tab === 'equipment'" />
+
+    <!-- Analysis Tab -->
+    <AnalysisView
+      v-if="tab === 'analysis'"
+      :history="sortedHistory"
+      @go-to-record="handleGoToRecord"
+    />
+
+    <!-- Toast notification -->
+    <Transition name="toast-fade">
+      <div class="toast" v-if="toastMsg">{{ toastMsg }}</div>
+    </Transition>
+  </template>
 </template>
 
 <script setup>
 import { ref, computed, provide, onMounted } from 'vue'
 
-// Components
-import AppHeader   from './components/AppHeader.vue'
-import AppNav      from './components/AppNav.vue'
-import DailyRecord from './components/DailyRecord.vue'
-import HistoryView from './components/HistoryView.vue'
-import EquipmentMaster from './components/EquipmentMaster.vue'
-import AnalysisView from './components/AnalysisView.vue'
+// ── Landing & PPE ──
+import LandingPage from './components/LandingPage.vue'
+import PPESystem   from './components/PPESystem.vue'
 
-// Composable
+// ── Equipment Tracker components (original) ──
+import AppHeader      from './components/AppHeader.vue'
+import AppNav         from './components/AppNav.vue'
+import DailyRecord    from './components/DailyRecord.vue'
+import HistoryView    from './components/HistoryView.vue'
+import EquipmentMaster from './components/EquipmentMaster.vue'
+import AnalysisView   from './components/AnalysisView.vue'
+
+// ── Composables ──
 import { useRecords } from './composables/useRecords.js'
 
-// ---- Tab state ----
+// ────────────────────────────────────
+// SYSTEM ROUTER
+// ────────────────────────────────────
+const currentSystem = ref('landing')   // 'landing' | 'equipment' | 'ppe'
+
+function navigateTo(system) {
+  currentSystem.value = system
+}
+
+// ────────────────────────────────────
+// EQUIPMENT TRACKER (original logic — unchanged)
+// ────────────────────────────────────
 const tab = ref('daily')
-
-// ---- Records composable ----
-
-
 
 const {
   recordDate,
@@ -100,23 +131,22 @@ const {
   totalBorrowers
 } = useRecords()
 
-// Provide all borrow rows to child components (EquipmentTable availability panel)
+// Provide all borrow rows to child components
 provide('allEquipRows', computed(() => [
   ...newEquipRows.value,
   ...oldEquipRows.value
 ]))
 
-// ---- Toast ----
+// ── Toast ──
 const toastMsg = ref('')
 let toastTimer = null
-
 function showToast(msg) {
   toastMsg.value = msg
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => (toastMsg.value = ''), 2600)
 }
 
-// ---- Event handlers ----
+// ── Event handlers (unchanged) ──
 function handleSave() {
   saveRecord()
   showToast('✅ Record saved for ' + recordDate.value)
@@ -154,26 +184,16 @@ function handleRenameRecord({ oldDate, newDate }) {
 }
 
 function handleGoToRecord({ date, section, codeNo, toolName }) {
-  // Load the history record for that date into the Daily Record view
   const record = history.value.find(r => r.date === date)
   if (record) {
     loadRecord(record)
   } else {
-    // No saved record — just switch to that date
     switchToDate(date)
   }
   tab.value = 'daily'
   showToast('✏️ Editing ' + (toolName || codeNo) + ' — ' + date)
 }
 
-/**
- * "Save & Move to History" — called from BorrowerCardModal.
- * Upserts the row into the history record for today:
- *   • If a row with the same ID already exists (put there by saveRecord()),
- *     REPLACE it with the updated version — no duplicate.
- *   • If the row is brand-new (no prior saveRecord()), append it.
- * Then removes the row from the active daily record.
- */
 function handleSaveRow(section, row) {
   const today = recordDate.value
   const sectionKey = section === 'new' ? 'newEquipRows' : 'oldEquipRows'
@@ -185,16 +205,13 @@ function handleSaveRow(section, row) {
     const rows = existing[sectionKey] || []
     const idx = rows.findIndex(r => r.id === row.id)
     if (idx >= 0) {
-      // Row already saved → replace it with the updated version
       rows.splice(idx, 1, rowSnapshot)
     } else {
-      // Row not yet in history → append
       rows.push(rowSnapshot)
     }
     existing[sectionKey] = rows
     existing.savedAt = new Date().toISOString()
   } else {
-    // No history entry for today at all → create one
     const emptyOther = section === 'new' ? 'oldEquipRows' : 'newEquipRows'
     const newEntry = {
       date: today,
@@ -207,17 +224,15 @@ function handleSaveRow(section, row) {
     history.value.push(newEntry)
   }
 
-  // Persist to localStorage
   localStorage.setItem('eqt_history', JSON.stringify(history.value))
 
-  // Remove the row from the active daily record
   const rowIndex = (section === 'new' ? newEquipRows : oldEquipRows).value.findIndex(r => r.id === row.id)
   if (rowIndex >= 0) removeRow(section, rowIndex)
 
   showToast('✅ Row saved to History for ' + today)
 }
 
-// ---- Init ----
+// ── Init ──
 onMounted(loadHistory)
 </script>
 

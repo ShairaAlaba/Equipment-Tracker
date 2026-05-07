@@ -1,10 +1,18 @@
 <template>
   <header class="app-header">
-    <div class="logo">
-      <div class="logo-icon">📋</div>
-      <div>
-        <h1>EQT Tracker</h1>
-        <span>Equipment Borrow Management System</span>
+    <div class="header-left">
+      <button class="back-hub-btn" @click="$emit('back')">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Hub
+      </button>
+      <div class="logo">
+        <div class="logo-icon">📋</div>
+        <div>
+          <h1>EQT Tracker</h1>
+          <span>Equipment Borrow Management System</span>
+        </div>
       </div>
     </div>
     <div class="header-date">
@@ -16,6 +24,8 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+
+defineEmits(['back'])
 
 const props = defineProps({
   recordDate: { type: String, required: true }
@@ -50,6 +60,35 @@ onBeforeUnmount(() => clearInterval(timerId))
   align-items: center;
   justify-content: space-between;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.05);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.back-hub-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-family: 'Nunito', sans-serif;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.back-hub-btn:hover {
+  background: var(--bg);
+  border-color: var(--accent);
 }
 
 .logo {
