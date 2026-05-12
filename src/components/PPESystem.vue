@@ -70,7 +70,7 @@
       <!-- Step 2: Enter worker data -->
       <section class="ppe-section entry-section" v-else>
         <div class="entry-header">
-          <button class="back-ppe-btn" @click="selectedPPE = null; entryRows = [makeEntry()]">
+          <button class="back-ppe-btn" @click="resetEntry">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -91,6 +91,7 @@
                 <th style="width:36px">#</th>
                 <th>Full Name</th>
                 <th style="width:180px">Designation</th>
+                <th style="width:90px">QTY</th>
                 <th style="width:130px">Date</th>
                 <th style="width:110px">Time</th>
                 <th>Remarks</th>
@@ -117,6 +118,15 @@
                   />
                 </td>
                 <td>
+                  <input
+                    type="number"
+                    v-model.number="row.qty"
+                    min="1"
+                    placeholder="1"
+                    class="tbl-input tbl-input--qty"
+                  />
+                </td>
+                <td>
                   <input type="date" v-model="row.date" class="tbl-input" />
                 </td>
                 <td>
@@ -134,7 +144,7 @@
                   <button
                     v-if="entryRows.length > 1"
                     class="del-row-btn"
-                    @click="entryRows.splice(i, 1)"
+                    @click="removeEntryRow(i)"
                     title="Remove row"
                   >×</button>
                 </td>
@@ -144,11 +154,11 @@
         </div>
 
         <div class="entry-actions">
-          <button class="btn btn-secondary" @click="entryRows.push(makeEntry())">
+          <button class="btn btn-secondary" @click="addEntryRow()">
             + Add Row
           </button>
           <div class="action-right">
-            <button class="btn btn-secondary" @click="selectedPPE = null; entryRows = [makeEntry()]">
+            <button class="btn btn-secondary" @click="resetEntry">
               Cancel
             </button>
             <button class="btn btn-primary" @click="handleSave" :disabled="!hasValidEntries">
@@ -192,6 +202,7 @@
                 <th>Full Name</th>
                 <th>PPE Issued</th>
                 <th>Designation</th>
+                <th style="width:90px; text-align:center">QTY</th>
                 <th>Date</th>
                 <th>Time</th>
                 <th>Remarks</th>
@@ -213,6 +224,7 @@
                   </span>
                 </td>
                 <td>{{ res.designation }}</td>
+                <td style="text-align:center"><span class="qty-pill">{{ res.qty || 1 }}</span></td>
                 <td>{{ res.date }}</td>
                 <td>{{ res.time }}</td>
                 <td>{{ res.remarks }}</td>
@@ -269,6 +281,7 @@
                 <tr>
                   <th>Full Name</th>
                   <th>Designation</th>
+                  <th style="width:90px; text-align:center">QTY</th>
                   <th>Date</th>
                   <th>Time</th>
                   <th>Remarks</th>
@@ -278,6 +291,7 @@
                 <tr v-for="(entry, i) in record.entries" :key="i">
                   <td>{{ entry.name }}</td>
                   <td>{{ entry.designation }}</td>
+                  <td style="text-align:center"><span class="qty-pill">{{ entry.qty || 1 }}</span></td>
                   <td>{{ entry.date }}</td>
                   <td>{{ entry.time }}</td>
                   <td>{{ entry.remarks }}</td>
@@ -306,15 +320,6 @@
         </div>
 
         <div class="ar-filters">
-          <select v-model="arSortBy" class="ar-select">
-            <option value="date-desc">Date — Newest First</option>
-            <option value="date-asc">Date — Oldest First</option>
-            <option value="name-asc">Name — A to Z</option>
-            <option value="name-desc">Name — Z to A</option>
-            <option value="ppe">PPE Type</option>
-            <option value="designation">Designation</option>
-          </select>
-
           <select v-model="arFilterPPE" class="ar-select">
             <option value="">All PPE Types</option>
             <option v-for="item in ppeItems" :key="item.id" :value="item.id">{{ item.name }}</option>
@@ -361,10 +366,87 @@
           <thead>
             <tr>
               <th style="width:36px">#</th>
-              <th>Full Name</th>
-              <th>Designation</th>
-              <th>PPE Issued</th>
-              <th style="width:120px">Date</th>
+
+              <!-- Full Name -->
+              <th class="th-sortable" :class="{ 'th-active': arSortField === 'name' }" @click.stop="toggleDropdown('name')">
+                <div class="th-inner">
+                  Full Name
+                  <span class="sort-indicator" v-html="getSortArrow('name')"></span>
+                </div>
+                <div class="sort-dropdown" v-if="activeDropdown === 'name'" @click.stop>
+                  <div class="sort-dd-item" :class="{ active: arSortField==='name' && arSortDir==='asc' }"  @click="applySort('name','asc')">
+                    <span class="dd-icon">↑</span> A → Z
+                  </div>
+                  <div class="sort-dd-item" :class="{ active: arSortField==='name' && arSortDir==='desc' }" @click="applySort('name','desc')">
+                    <span class="dd-icon">↓</span> Z → A
+                  </div>
+                </div>
+              </th>
+
+              <!-- Designation -->
+              <th class="th-sortable" :class="{ 'th-active': arSortField === 'designation' }" @click.stop="toggleDropdown('designation')">
+                <div class="th-inner">
+                  Designation
+                  <span class="sort-indicator" v-html="getSortArrow('designation')"></span>
+                </div>
+                <div class="sort-dropdown" v-if="activeDropdown === 'designation'" @click.stop>
+                  <div class="sort-dd-item" :class="{ active: arSortField==='designation' && arSortDir==='asc' }"  @click="applySort('designation','asc')">
+                    <span class="dd-icon">↑</span> A → Z
+                  </div>
+                  <div class="sort-dd-item" :class="{ active: arSortField==='designation' && arSortDir==='desc' }" @click="applySort('designation','desc')">
+                    <span class="dd-icon">↓</span> Z → A
+                  </div>
+                </div>
+              </th>
+
+              <!-- PPE Issued -->
+              <th class="th-sortable" :class="{ 'th-active': arSortField === 'ppe' }" @click.stop="toggleDropdown('ppe')">
+                <div class="th-inner">
+                  PPE Issued
+                  <span class="sort-indicator" v-html="getSortArrow('ppe')"></span>
+                </div>
+                <div class="sort-dropdown" v-if="activeDropdown === 'ppe'" @click.stop>
+                  <div class="sort-dd-item" :class="{ active: arSortField==='ppe' && arSortDir==='asc' }"  @click="applySort('ppe','asc')">
+                    <span class="dd-icon">↑</span> A → Z
+                  </div>
+                  <div class="sort-dd-item" :class="{ active: arSortField==='ppe' && arSortDir==='desc' }" @click="applySort('ppe','desc')">
+                    <span class="dd-icon">↓</span> Z → A
+                  </div>
+                </div>
+              </th>
+
+              <!-- QTY -->
+              <th class="th-sortable" style="width:90px; text-align:center" :class="{ 'th-active': arSortField === 'qty' }" @click.stop="toggleDropdown('qty')">
+                <div class="th-inner" style="justify-content:center">
+                  QTY
+                  <span class="sort-indicator" v-html="getSortArrow('qty')"></span>
+                </div>
+                <div class="sort-dropdown" v-if="activeDropdown === 'qty'" @click.stop>
+                  <div class="sort-dd-item" :class="{ active: arSortField==='qty' && arSortDir==='desc' }" @click="applySort('qty','desc')">
+                    <span class="dd-icon">↓</span> High → Low
+                  </div>
+                  <div class="sort-dd-item" :class="{ active: arSortField==='qty' && arSortDir==='asc' }"  @click="applySort('qty','asc')">
+                    <span class="dd-icon">↑</span> Low → High
+                  </div>
+                </div>
+              </th>
+
+              <!-- Date -->
+              <th class="th-sortable" style="width:130px" :class="{ 'th-active': arSortField === 'date' }" @click.stop="toggleDropdown('date')">
+                <div class="th-inner">
+                  Date
+                  <span class="sort-indicator" v-html="getSortArrow('date')"></span>
+                </div>
+                <div class="sort-dropdown" v-if="activeDropdown === 'date'" @click.stop>
+                  <div class="sort-dd-item" :class="{ active: arSortField==='date' && arSortDir==='desc' }" @click="applySort('date','desc')">
+                    <span class="dd-icon">🕐</span> Newest First
+                  </div>
+                  <div class="sort-dd-item" :class="{ active: arSortField==='date' && arSortDir==='asc' }"  @click="applySort('date','asc')">
+                    <span class="dd-icon">🕐</span> Oldest First
+                  </div>
+                </div>
+              </th>
+
               <th style="width:90px">Time</th>
               <th>Remarks</th>
             </tr>
@@ -389,6 +471,7 @@
                   {{ entry.ppeItemName }}
                 </span>
               </td>
+              <td style="text-align:center"><span class="qty-pill">{{ entry.qty || 1 }}</span></td>
               <td class="muted-cell mono">{{ entry.date }}</td>
               <td class="muted-cell mono">{{ entry.time }}</td>
               <td class="muted-cell">{{ entry.remarks }}</td>
@@ -416,6 +499,11 @@
           <div class="kpi-icon kpi-icon--green" v-html="svgWorkerIcon"></div>
           <div class="kpi-num">{{ uniqueNames }}</div>
           <div class="kpi-label">Unique Workers</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-icon kpi-icon--tan" v-html="svgBoxIcon"></div>
+          <div class="kpi-num">{{ totalQtyIssued }}</div>
+          <div class="kpi-label">Total Items Issued</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-icon kpi-icon--tan" v-html="svgBoxIcon"></div>
@@ -450,6 +538,10 @@
             <div class="ac-stat-row">
               <span class="ac-stat-label">Workers Issued</span>
               <span class="ac-stat-val ac-stat-big">{{ ppeWorkerCount(item.id) }}</span>
+            </div>
+            <div class="ac-stat-row">
+              <span class="ac-stat-label">Total QTY Issued</span>
+              <span class="ac-stat-val ac-stat-big" style="color: var(--ac-color)">{{ ppeTotalQty(item.id) }}</span>
             </div>
             <!-- Bar fill -->
             <div class="ac-bar-track">
@@ -578,7 +670,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { usePPE } from '../composables/usePPE.js'
 
 defineEmits(['back'])
@@ -606,6 +698,7 @@ function makeEntry() {
     id: ++_uid,
     name: '',
     designation: '',
+    qty: 1,
     date: now.toISOString().slice(0, 10),
     time: now.toTimeString().slice(0, 5),
     remarks: ''
@@ -620,6 +713,19 @@ const hasValidEntries = computed(() =>
 function selectPPE(item) {
   selectedPPE.value = item
   entryRows.value = [makeEntry()]
+}
+
+function resetEntry() {
+  selectedPPE.value = null
+  entryRows.value = [makeEntry()]
+}
+
+function addEntryRow() {
+  entryRows.value.push(makeEntry())
+}
+
+function removeEntryRow(i) {
+  entryRows.value.splice(i, 1)
 }
 
 // ── SVG Icon Library ──
@@ -761,15 +867,21 @@ async function handleAddItem() {
 
 // ── Save distribution ──
 async function handleSave() {
-  const valid = entryRows.value.filter(r => r.name.trim())
-  await savePPEDistribution({
-    ppeItemId: selectedPPE.value.id,
-    entries: valid
-  })
-  selectedPPE.value = null
-  entryRows.value = [makeEntry()]
-  view.value = 'history'
-  showToast('Distribution record saved')
+  try {
+    const valid = entryRows.value.filter(r => r.name.trim())
+    if (!valid.length) return
+    savePPEDistribution({
+      ppeItemId: selectedPPE.value.id,
+      entries: valid
+    })
+    selectedPPE.value = null
+    entryRows.value = [makeEntry()]
+    view.value = 'history'
+    showToast('Distribution record saved')
+  } catch (err) {
+    console.error('Save failed:', err)
+    showToast('Save failed — please try again')
+  }
 }
 
 // ── Delete ──
@@ -831,8 +943,37 @@ const allFlatEntries = computed(() => {
 })
 
 const arSearch    = ref('')
-const arSortBy    = ref('date-desc')
+const arSortField = ref('date')
+const arSortDir   = ref('desc')
 const arFilterPPE = ref('')
+const activeDropdown = ref(null)
+
+function toggleDropdown(field) {
+  activeDropdown.value = activeDropdown.value === field ? null : field
+}
+
+function applySort(field, dir) {
+  arSortField.value = field
+  arSortDir.value   = dir
+  activeDropdown.value = null
+}
+
+// Close dropdown when clicking outside the table header
+function onDocClick() {
+  activeDropdown.value = null
+}
+
+onMounted(() => document.addEventListener('click', onDocClick))
+onUnmounted(() => document.removeEventListener('click', onDocClick))
+
+const svgSortAsc  = `<svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M5 2l4 6H1z"/></svg>`
+const svgSortDesc = `<svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M5 8L1 2h8z"/></svg>`
+const svgSortNone = `<svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" opacity="0.3"><path d="M5 2l3 4H2z M5 8L2 4h6z"/></svg>`
+
+function getSortArrow(field) {
+  if (arSortField.value !== field) return svgSortNone
+  return arSortDir.value === 'asc' ? svgSortAsc : svgSortDesc
+}
 
 const filteredFlatEntries = computed(() => {
   let list = [...allFlatEntries.value]
@@ -852,25 +993,23 @@ const filteredFlatEntries = computed(() => {
     )
   }
 
-  // Sort
-  switch (arSortBy.value) {
-    case 'date-desc':
-      list.sort((a, b) => new Date(b.savedAt || 0) - new Date(a.savedAt || 0))
+  // Sort by column header
+  const dir = arSortDir.value === 'asc' ? 1 : -1
+  switch (arSortField.value) {
+    case 'date':
+      list.sort((a, b) => dir * (new Date(a.savedAt || 0) - new Date(b.savedAt || 0)))
       break
-    case 'date-asc':
-      list.sort((a, b) => new Date(a.savedAt || 0) - new Date(b.savedAt || 0))
-      break
-    case 'name-asc':
-      list.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-      break
-    case 'name-desc':
-      list.sort((a, b) => (b.name || '').localeCompare(a.name || ''))
+    case 'name':
+      list.sort((a, b) => dir * (a.name || '').localeCompare(b.name || ''))
       break
     case 'ppe':
-      list.sort((a, b) => (a.ppeItemName || '').localeCompare(b.ppeItemName || ''))
+      list.sort((a, b) => dir * (a.ppeItemName || '').localeCompare(b.ppeItemName || ''))
       break
     case 'designation':
-      list.sort((a, b) => (a.designation || '').localeCompare(b.designation || ''))
+      list.sort((a, b) => dir * (a.designation || '').localeCompare(b.designation || ''))
+      break
+    case 'qty':
+      list.sort((a, b) => dir * ((Number(a.qty) || 1) - (Number(b.qty) || 1)))
       break
   }
   return list
@@ -888,6 +1027,7 @@ function printAllRecords() {
     '<td>' + (e.name || '') + '</td>',
     '<td>' + (e.designation || '') + '</td>',
     '<td>' + (e.ppeItemName || '') + '</td>',
+    '<td style="text-align:center">' + (Number(e.qty) || 1) + '</td>',
     '<td>' + (e.date || '') + '</td>',
     '<td>' + (e.time || '') + '</td>',
     '<td>' + (e.remarks || '') + '</td>',
@@ -911,7 +1051,7 @@ function printAllRecords() {
     + '</style></head><body>'
     + '<h1>CSU — PPE All Records</h1>'
     + '<div class="meta">Printed: ' + printed + ' &nbsp;|&nbsp; ' + count + ' entries</div>'
-    + '<table><thead><tr><th>#</th><th>Full Name</th><th>Designation</th><th>PPE Issued</th><th>Date</th><th>Time</th><th>Remarks</th></tr></thead>'
+    + '<table><thead><tr><th>#</th><th>Full Name</th><th>Designation</th><th>PPE Issued</th><th>QTY</th><th>Date</th><th>Time</th><th>Remarks</th></tr></thead>'
     + '<tbody>' + rows + '</tbody></table>'
     + '<div class="footer">Civil Service Unit — PPE Distribution System</div>'
     + '</body></html>'
@@ -949,6 +1089,29 @@ function ppeBarWidth(ppeItemId) {
   const total = totalWorkers.value
   if (!total) return 0
   return Math.round((ppeWorkerCount(ppeItemId) / total) * 100)
+}
+
+// Sum of all qty values across all entries
+const totalQtyIssued = computed(() => {
+  let sum = 0
+  for (const rec of sortedPPERecords.value) {
+    for (const e of (rec.entries || [])) {
+      sum += Number(e.qty) || 1
+    }
+  }
+  return sum
+})
+
+// Total qty issued for a specific PPE type
+function ppeTotalQty(ppeItemId) {
+  let sum = 0
+  for (const rec of sortedPPERecords.value) {
+    if (rec.ppeItemId !== ppeItemId) continue
+    for (const e of (rec.entries || [])) {
+      sum += Number(e.qty) || 1
+    }
+  }
+  return sum
 }
 
 function ppeRecentWorkers(ppeItemId) {
@@ -1013,6 +1176,7 @@ function printRecord(record) {
       <td>${i + 1}</td>
       <td>${e.name || ''}</td>
       <td>${e.designation || ''}</td>
+      <td style="text-align:center">${Number(e.qty) || 1}</td>
       <td>${e.date || ''}</td>
       <td>${e.time || ''}</td>
       <td>${e.remarks || ''}</td>
@@ -1046,7 +1210,7 @@ function printRecord(record) {
       <div class="ppe-badge">${record.ppeItemName}</div>
       <table>
         <thead>
-          <tr><th>#</th><th>Full Name</th><th>Designation</th><th>Date</th><th>Time</th><th>Remarks</th></tr>
+          <tr><th>#</th><th>Full Name</th><th>Designation</th><th>QTY</th><th>Date</th><th>Time</th><th>Remarks</th></tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
@@ -1997,5 +2161,106 @@ function showToast(msg) {
   15%  { opacity: 1; transform: translateY(0); }
   75%  { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* ── Sortable column headers ── */
+.th-sortable {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: background 0.15s, color 0.15s;
+}
+.th-sortable:hover { background: #f0e8dc !important; color: #5a3a1a; }
+.th-active         { background: #f0e8dc !important; color: #6a4a28 !important; }
+
+.th-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.sort-indicator {
+  display: inline-flex;
+  align-items: center;
+  color: #8a6a4a;
+  flex-shrink: 0;
+}
+
+/* ── Sort dropdown ── */
+.sort-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 160px;
+  background: #fff;
+  border: 1.5px solid #ddd0bc;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  z-index: 999;
+  overflow: hidden;
+  animation: ddFadeIn 0.13s ease;
+}
+@keyframes ddFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.sort-dd-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: 'Nunito', sans-serif;
+  color: #5a3a1a;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+  transition: background 0.12s;
+  white-space: nowrap;
+}
+.sort-dd-item:hover   { background: #f9f3eb; }
+.sort-dd-item.active  {
+  background: #f0e8dc;
+  color: #8a6a4a;
+}
+.sort-dd-item.active::after {
+  content: '✓';
+  margin-left: auto;
+  font-size: 11px;
+  color: #8a6a4a;
+}
+.sort-dd-item + .sort-dd-item { border-top: 1px solid #f0e8dc; }
+
+.dd-icon {
+  font-size: 13px;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* ── QTY pill ── */
+.qty-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  padding: 2px 8px;
+  background: #f0e8dc;
+  color: #6a4a28;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 800;
+  font-family: 'DM Mono', monospace;
+  border: 1px solid #ddd0bc;
+}
+
+/* ── QTY input ── */
+.tbl-input--qty {
+  text-align: center;
+  font-weight: 700;
+  font-family: 'DM Mono', monospace;
 }
 </style>

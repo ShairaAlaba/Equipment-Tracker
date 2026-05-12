@@ -86,20 +86,27 @@ onSnapshot(itemsColRef, async (snap) => {
 const recordsColRef = collection(db, PPE_RECORDS_COL)
 
 onSnapshot(recordsColRef, (snap) => {
-  ppeRecords.value = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  const fromServer = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+  // Merge: keep any local records not yet on server, add all server records
+  const serverIds = new Set(fromServer.map(r => r.id))
+  const localOnly = ppeRecords.value.filter(r => !serverIds.has(r.id))
+  ppeRecords.value = [...fromServer, ...localOnly]
   ppeSyncStatus.value = 'synced'
   savePPERecordsLocal()
 }, err => {
   console.error('PPE records error:', err)
-  ppeSyncStatus.value = 'error'
-  ppeRecords.value = loadPPERecordsLocal()
+  ppeSyncStatus.value = 'offline'
+  // Keep existing in-memory state; already loaded from localStorage at init
 })
 
 // ── Write helpers ──
 async function writePPERecord(record) {
-  savePPERecordsLocal()
   const { id, ...data } = record
-  await setDoc(doc(db, PPE_RECORDS_COL, id), data)
+  try {
+    await setDoc(doc(db, PPE_RECORDS_COL, id), data)
+  } catch (err) {
+    console.warn('Firestore write failed, saved locally only:', err)
+  }
 }
 
 async function deletePPERecord(id) {
@@ -160,9 +167,14 @@ async function savePPEDistribution({ ppeItemId, entries }) {
     entries: entries.map(e => ({ ...e }))
   }
 
-  ppeRecords.value.push(record)
+  // Always push locally first so UI updates immediately (works offline too)
+  const existing = ppeRecords.value.findIndex(r => r.id === id)
+  if (existing === -1) {
+    ppeRecords.value.push(record)
+  }
   savePPERecordsLocal()
-  await writePPERecord(record)
+  // Then attempt Firestore write (fire and forget — onSnapshot will sync if online)
+  writePPERecord(record)
   return record
 }
 
