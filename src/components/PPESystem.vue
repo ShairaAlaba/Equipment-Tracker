@@ -48,16 +48,38 @@
       <section class="ppe-section" v-if="!selectedPPE">
         <div class="section-label">Step 1 — Select PPE Type</div>
         <div class="ppe-grid">
-          <button
+          <div
             v-for="item in ppeItems"
             :key="item.id"
             class="ppe-item-card"
+            :class="{ 'ppe-out-of-stock': (item.stock || 0) === 0 }"
             :style="{ '--item-color': item.color }"
-            @click="selectPPE(item)"
           >
-            <span class="ppe-item-icon" v-html="getPPEIconSVG(item.id)"></span>
-            <span class="ppe-item-name">{{ item.name }}</span>
-          </button>
+            <!-- Main clickable area -->
+            <div class="ppe-card-body" @click="selectPPE(item)">
+              <span class="ppe-item-icon" v-html="getPPEIconSVG(item.id)"></span>
+              <span class="ppe-item-name">{{ item.name }}</span>
+              <span class="ppe-stock-badge" :class="{
+                'stock-ok':  (item.stock || 0) > 10,
+                'stock-low': (item.stock || 0) > 0 && (item.stock || 0) <= 10,
+                'stock-none': (item.stock || 0) === 0
+              }">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                {{ item.stock || 0 }} left
+              </span>
+            </div>
+            <!-- Action row -->
+            <div class="ppe-card-actions">
+              <button class="ppe-act-btn ppe-act-edit" @click.stop="openEditPPE(item)" title="Edit PPE type">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                Edit
+              </button>
+              <button class="ppe-act-btn ppe-act-delete" @click.stop="openDeletePPE(item)" title="Delete PPE type">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                Delete
+              </button>
+            </div>
+          </div>
 
           <!-- Add new PPE type -->
           <button class="ppe-item-card ppe-item-add" @click="showAddModal = true">
@@ -175,6 +197,12 @@
     <div v-if="view === 'history'" class="ppe-body">
 
       <div class="history-top">
+        <!-- Export All -->
+        <button class="btn btn-excel btn-sm btn-icon" @click="handleExportAll" :disabled="!sortedPPERecords.length">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+          Export All to Excel
+        </button>
+
         <!-- Search -->
         <div class="search-wrap">
           <svg class="search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -266,6 +294,10 @@
                 <button class="btn btn-secondary btn-sm btn-icon" @click="printRecord(record)">
                   <span v-html="svgPrinter"></span> Print
                 </button>
+                <button class="btn btn-excel btn-sm btn-icon" @click="handleExportSingle(record)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                  Excel
+                </button>
                 <button class="btn btn-danger btn-sm" @click="confirmDelete(record.id)">
                   Delete
                 </button>
@@ -285,6 +317,7 @@
                   <th>Date</th>
                   <th>Time</th>
                   <th>Remarks</th>
+                  <th style="width:90px; text-align:center">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -295,6 +328,16 @@
                   <td>{{ entry.date }}</td>
                   <td>{{ entry.time }}</td>
                   <td>{{ entry.remarks }}</td>
+                  <td style="text-align:center">
+                    <div class="entry-act-row">
+                      <button class="entry-act-btn entry-act-edit" @click="openEditEntry(record, i)" title="Edit entry">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                      </button>
+                      <button class="entry-act-btn entry-act-delete" @click="openDeleteEntry(record, i)" title="Delete entry">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -327,6 +370,10 @@
 
           <button class="btn btn-secondary btn-sm btn-icon" @click="printAllRecords">
             <span v-html="svgPrinter"></span> Print All
+          </button>
+          <button class="btn btn-excel btn-sm btn-icon" @click="handleExportFlat" :disabled="!filteredFlatEntries.length">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Export to Excel
           </button>
         </div>
       </div>
@@ -531,6 +578,25 @@
             <div class="ac-title">{{ item.name }}</div>
           </div>
           <div class="ac-body">
+            <!-- Stock bar -->
+            <div class="ac-stock-section">
+              <div class="ac-stock-header">
+                <span class="ac-stock-label">Stock Remaining</span>
+                <span class="ac-stock-nums">
+                  <strong :style="{ color: stockColor(item) }">{{ item.stock || 0 }}</strong>
+                  <span class="ac-stock-sep">/ {{ ppeInitialStock(item.id) }}</span>
+                </span>
+              </div>
+              <div class="ac-stock-track">
+                <div class="ac-stock-fill" :style="{ width: stockPercent(item) + '%', background: stockColor(item) }"></div>
+              </div>
+              <div class="ac-stock-status" :style="{ color: stockColor(item) }">
+                <span v-if="(item.stock || 0) === 0">⚠ Out of stock</span>
+                <span v-else-if="(item.stock || 0) <= 10">⚠ Low stock</span>
+                <span v-else>✓ In stock</span>
+              </div>
+            </div>
+            <div class="ac-divider"></div>
             <div class="ac-stat-row">
               <span class="ac-stat-label">Records</span>
               <span class="ac-stat-val">{{ ppeRecordCount(item.id) }}</span>
@@ -640,6 +706,11 @@
           <label class="bf">Color</label>
           <input type="color" v-model="newItem.color" class="color-pick" />
         </div>
+        <div class="form-group">
+          <label class="bf">Initial Stock / Quantity</label>
+          <input type="number" v-model.number="newItem.stock" min="0" placeholder="e.g. 100" class="modal-input" style="max-width:160px" />
+          <div class="form-hint">Total units available for this PPE type</div>
+        </div>
         <div class="modal-actions">
           <button class="btn btn-secondary" @click="showAddModal = false">Cancel</button>
           <button class="btn btn-primary" @click="handleAddItem" :disabled="!newItem.name.trim()">Add PPE Type</button>
@@ -647,7 +718,138 @@
       </div>
     </div>
 
-    <!-- Delete confirm -->
+    <!-- Set Stock Modal -->
+    <div class="modal-overlay" v-if="showStockModal" @click.self="showStockModal = false">
+      <div class="modal" style="max-width:380px">
+        <h2>Set Stock — {{ stockEditItem?.name }}</h2>
+        <p class="modal-sub">Enter the total available quantity for this PPE type. Issued quantities will automatically deduct from this number.</p>
+        <div class="form-group">
+          <label class="bf">Available Stock (QTY)</label>
+          <input
+            type="number"
+            v-model.number="stockEditValue"
+            min="0"
+            class="modal-input"
+            style="max-width:160px; font-size:22px; font-weight:800; text-align:center"
+            autofocus
+          />
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="showStockModal = false">Cancel</button>
+          <button class="btn btn-primary" @click="handleStockSave">Save Stock</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit PPE Type Modal -->
+    <div class="modal-overlay" v-if="showEditPPEModal" @click.self="showEditPPEModal = false">
+      <div class="modal">
+        <h2>Edit PPE Type</h2>
+        <div class="form-group">
+          <label class="bf">Equipment Name</label>
+          <input type="text" v-model="editItem.name" placeholder="e.g. Face Shield" class="modal-input" />
+        </div>
+        <div class="form-group">
+          <label class="bf">Icon (choose below)</label>
+          <div class="icon-picker">
+            <button
+              v-for="opt in iconOptions"
+              :key="opt.id"
+              :class="['icon-opt', { active: editItem.iconId === opt.id }]"
+              @click="editItem.iconId = opt.id"
+              :title="opt.label"
+              v-html="opt.svg"
+            ></button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="bf">Color</label>
+          <input type="color" v-model="editItem.color" class="color-pick" />
+        </div>
+        <div class="form-group">
+          <label class="bf">Stock / Quantity</label>
+          <input type="number" v-model.number="editItem.stock" min="0" class="modal-input" style="max-width:160px" />
+          <div class="form-hint">Adjust the remaining available stock</div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="showEditPPEModal = false">Cancel</button>
+          <button class="btn btn-primary" @click="handleEditPPE" :disabled="!editItem.name.trim()">Save Changes</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete PPE Type confirm -->
+    <div class="modal-overlay" v-if="deletePPETarget" @click.self="deletePPETarget = null">
+      <div class="modal" style="max-width:420px">
+        <h2>Delete PPE Type?</h2>
+        <p style="color:#555; margin-bottom:6px; font-size:14px">
+          You are about to delete <strong>{{ deletePPETarget?.name }}</strong>.
+        </p>
+        <p style="color:#e05c5c; margin-bottom:24px; font-size:13px">
+          ⚠ This will not delete existing distribution records, but the PPE type will no longer appear in the list.
+        </p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="deletePPETarget = null">Cancel</button>
+          <button class="btn btn-danger" @click="handleDeletePPE">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit Entry Modal -->
+    <div class="modal-overlay" v-if="showEditEntryModal" @click.self="showEditEntryModal = false">
+      <div class="modal">
+        <h2>Edit Entry</h2>
+        <div class="form-group">
+          <label class="bf">Full Name</label>
+          <input type="text" v-model="editEntryData.name" class="modal-input" placeholder="Worker name" />
+        </div>
+        <div class="form-group">
+          <label class="bf">Designation</label>
+          <input type="text" v-model="editEntryData.designation" class="modal-input" placeholder="e.g. Welder, Mason" />
+        </div>
+        <div class="form-group">
+          <label class="bf">QTY</label>
+          <input type="number" v-model.number="editEntryData.qty" min="1" class="modal-input" style="max-width:120px" />
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1">
+            <label class="bf">Date</label>
+            <input type="date" v-model="editEntryData.date" class="modal-input" />
+          </div>
+          <div class="form-group" style="flex:1">
+            <label class="bf">Time</label>
+            <input type="time" v-model="editEntryData.time" class="modal-input" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="bf">Remarks</label>
+          <input type="text" v-model="editEntryData.remarks" class="modal-input" placeholder="Optional" />
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="showEditEntryModal = false">Cancel</button>
+          <button class="btn btn-primary" @click="handleEditEntry" :disabled="!editEntryData.name.trim()">Save Changes</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Entry confirm -->
+    <div class="modal-overlay" v-if="deleteEntryTarget" @click.self="deleteEntryTarget = null">
+      <div class="modal" style="max-width:420px">
+        <h2>Delete Entry?</h2>
+        <p style="color:#555; margin-bottom:6px; font-size:14px">
+          Remove <strong>{{ deleteEntryTarget?.entry?.name }}</strong> from this record?
+        </p>
+        <p style="color:#e05c5c; margin-bottom:24px; font-size:13px">
+          ⚠ The QTY ({{ deleteEntryTarget?.entry?.qty || 1 }}) will be restored to the PPE stock.
+        </p>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" @click="deleteEntryTarget = null">Cancel</button>
+          <button class="btn btn-danger" @click="handleDeleteEntry">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Record confirm -->
     <div class="modal-overlay" v-if="deleteTargetId" @click.self="deleteTargetId = null">
       <div class="modal" style="max-width: 400px">
         <h2>Delete Record?</h2>
@@ -681,8 +883,10 @@ const {
   ppeSyncStatus,
   addPPEItem,
   removePPEItem,
+  updatePPEItem,
   savePPEDistribution,
   deletePPEDistribution,
+  updatePPERecord,
   searchWorker,
 } = usePPE()
 
@@ -856,13 +1060,60 @@ function getPPEIconSVG(ppeItemId) {
 
 // ── Add PPE item modal ──
 const showAddModal = ref(false)
-const newItem = ref({ name: '', iconId: 'shield', color: '#8a6a4a' })
+const newItem = ref({ name: '', iconId: 'shield', color: '#8a6a4a', stock: 0 })
 
 async function handleAddItem() {
   await addPPEItem({ ...newItem.value, icon: newItem.value.iconId })
-  newItem.value = { name: '', iconId: 'shield', color: '#8a6a4a' }
+  newItem.value = { name: '', iconId: 'shield', color: '#8a6a4a', stock: 0 }
   showAddModal.value = false
   showToast('PPE type added')
+}
+
+// ── Edit PPE type ──
+const showEditPPEModal = ref(false)
+const editItem = ref({ id: '', name: '', iconId: 'shield', color: '#8a6a4a', stock: 0 })
+
+function openEditPPE(item) {
+  // Find the icon option that matches the stored icon field
+  const matchedIcon = iconOptions.find(o =>
+    o.id === item.iconId ||
+    o.id === item.icon ||
+    o.label?.toLowerCase() === item.name?.toLowerCase()
+  )
+  editItem.value = {
+    ...item,
+    iconId: matchedIcon?.id || item.iconId || item.icon || 'shield',
+    stock: Number(item.stock) || 0
+  }
+  showEditPPEModal.value = true
+}
+
+async function handleEditPPE() {
+  if (!editItem.value.name.trim()) return
+  const updated = {
+    ...editItem.value,
+    name:  editItem.value.name.trim(),
+    icon:  editItem.value.iconId,
+    color: editItem.value.color,
+    stock: Number(editItem.value.stock) || 0
+  }
+  await updatePPEItem(updated)
+  showEditPPEModal.value = false
+  showToast('PPE type updated')
+}
+
+// ── Delete PPE type ──
+const deletePPETarget = ref(null)
+
+function openDeletePPE(item) {
+  deletePPETarget.value = item
+}
+
+async function handleDeletePPE() {
+  if (!deletePPETarget.value) return
+  await removePPEItem(deletePPETarget.value.id)
+  deletePPETarget.value = null
+  showToast('PPE type deleted')
 }
 
 // ── Save distribution ──
@@ -884,7 +1135,62 @@ async function handleSave() {
   }
 }
 
-// ── Delete ──
+// ── Edit / Delete individual history entries ──
+const showEditEntryModal = ref(false)
+const editEntryData      = ref({})
+const editEntryContext   = ref(null) // { record, index }
+
+function openEditEntry(record, index) {
+  const entry = record.entries[index]
+  editEntryData.value    = { ...entry, qty: Number(entry.qty) || 1 }
+  editEntryContext.value = { record, index }
+  showEditEntryModal.value = true
+}
+
+async function handleEditEntry() {
+  if (!editEntryData.value.name?.trim()) return
+  const { record, index } = editEntryContext.value
+  const updatedEntries = record.entries.map((e, i) =>
+    i === index ? { ...e, ...editEntryData.value } : e
+  )
+  const updatedRecord = { ...record, entries: updatedEntries }
+  await updatePPERecord(updatedRecord)
+  showEditEntryModal.value = false
+  showToast('Entry updated')
+}
+
+const deleteEntryTarget = ref(null) // { record, index, entry }
+
+function openDeleteEntry(record, index) {
+  deleteEntryTarget.value = { record, index, entry: record.entries[index] }
+}
+
+async function handleDeleteEntry() {
+  if (!deleteEntryTarget.value) return
+  const { record, index } = deleteEntryTarget.value
+  const removedQty = Number(record.entries[index]?.qty) || 1
+
+  // Restore stock to the PPE item
+  const itemIdx = ppeItems.value.findIndex(i => i.id === record.ppeItemId)
+  if (itemIdx !== -1) {
+    const restored = (Number(ppeItems.value[itemIdx].stock) || 0) + removedQty
+    const updated  = { ...ppeItems.value[itemIdx], stock: restored }
+    ppeItems.value[itemIdx] = updated
+    await updatePPEItem(updated)
+  }
+
+  const updatedEntries = record.entries.filter((_, i) => i !== index)
+  if (updatedEntries.length === 0) {
+    // Remove the whole record if no entries left
+    await deletePPEDistribution(record.id)
+  } else {
+    await updatePPERecord({ ...record, entries: updatedEntries })
+  }
+  deleteEntryTarget.value = null
+  showToast('Entry deleted')
+}
+
+// ── Delete distribution record ──
 const deleteTargetId = ref(null)
 function confirmDelete(id) { deleteTargetId.value = id }
 async function handleDelete() {
@@ -893,8 +1199,443 @@ async function handleDelete() {
   showToast('Record deleted')
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// EXCEL EXPORT ENGINE — ExcelJS  (brown / beige / gold theme)
+// Loaded once from CDN on first click — no npm install needed
+// ══════════════════════════════════════════════════════════════
+
+// ── Palette ──
+const C = {
+  espresso:   '3D2B1F',   // deepest brown  → title bars
+  choco:      '6B4C30',   // mid brown      → section headers
+  brown:      '8A6A4A',   // warm brown     → accents
+  tan:        'C4A882',   // tan            → sub-headers
+  beige:      'F0E8DC',   // light beige    → alt rows / info cells
+  cream:      'FFFDF8',   // near-white     → normal rows
+  gold:       'D4A96A',   // gold           → accent stripe, totals
+  goldLight:  'FFF4DC',   // pale gold      → KPI value cells
+  parchment:  'FFF8EE',   // warm off-white → alt rows
+  white:      'FFFFFF',
+  border:     'D6C4A8',   // beige border
+  muted:      '9A8070',   // muted text
+  darkText:   '3D2B1F',   // body text
+  green:      '2E6B3E',   // stock OK
+  greenLight: 'EAF5EC',
+  orange:     'A0560A',   // stock low
+  orangeLight:'FFF3E0',
+  red:        'B83232',   // stock empty
+  redLight:   'FDEAEA',
+  totalBg:    'EDD9B0',   // totals row
+  totalText:  '3D2B1F',
+}
+
+// ── Style helpers ──
+const xlFill = hex => ({ type:'pattern', pattern:'solid', fgColor:{ argb:'FF'+hex } })
+const xlFont = (hex, sz, bold, italic) => ({ name:'Calibri', size:sz||10, bold:!!bold, italic:!!italic, color:{ argb:'FF'+hex } })
+const xlBdr  = (hex) => { const s={ style:'thin', color:{ argb:'FF'+(hex||C.border) } }; return { top:s, bottom:s, left:s, right:s } }
+const xlAln  = (h,v,wrap) => ({ horizontal:h||'left', vertical:v||'middle', wrapText:!!wrap })
+
+
+// Title banner — spans all columns
+function xlTitle(ws, row, nc, text, fillHex, fontHex, sz) {
+  ws.mergeCells(row, 1, row, nc)
+  const cell       = ws.getCell(row, 1)
+  cell.value       = text
+  cell.fill        = xlFill(fillHex || C.espresso)
+  cell.font        = xlFont(fontHex || C.white, sz || 16, true)
+  cell.alignment   = xlAln('center', 'middle')
+  ws.getRow(row).height = sz ? sz * 2 : 32
+}
+
+// Thin gold accent bar
+function xlGoldBar(ws, row, nc) {
+  for (let c=1; c<=nc; c++) {
+    const cell = ws.getCell(row, c)
+    cell.fill   = xlFill(C.gold)
+    cell.border = xlBdr(C.gold)
+  }
+  ws.getRow(row).height = 5
+}
+
+// Section label bar (choco brown)
+function xlSection(ws, row, nc, text) {
+  ws.mergeCells(row, 1, row, nc)
+  const cell     = ws.getCell(row, 1)
+  cell.value     = text
+  cell.fill      = xlFill(C.choco)
+  cell.font      = xlFont(C.white, 11, true)
+  cell.alignment = xlAln('left', 'middle')
+  cell.border    = xlBdr(C.choco)
+  ws.getRow(row).height = 22
+}
+
+// Column header row
+function xlHeaders(ws, row, labels, fillHex, fontHex) {
+  labels.forEach((lbl, i) => {
+    const cell     = ws.getCell(row, i+1)
+    cell.value     = lbl
+    cell.fill      = xlFill(fillHex || C.espresso)
+    cell.font      = xlFont(fontHex || C.white, 10, true)
+    cell.alignment = xlAln('center', 'middle', true)
+    cell.border    = xlBdr()
+  })
+  ws.getRow(row).height = 22
+}
+
+
+// Better row writer (fixed)
+function xlDataRow(ws, rowNum, values, isAlt, colCfg) {
+  const baseFill = isAlt ? C.parchment : C.cream
+  values.forEach((v, i) => {
+    const cell = ws.getCell(rowNum, i+1)
+    const cfg  = colCfg?.[i] || {}
+    cell.value     = v ?? ''
+    cell.fill      = xlFill(cfg.fill || baseFill)
+    cell.font      = xlFont(cfg.font || C.darkText, cfg.sz || 10, cfg.bold || false)
+    cell.alignment = xlAln(cfg.align || 'left', 'middle', true)
+    cell.border    = xlBdr()
+  })
+  ws.getRow(rowNum).height = 20
+}
+
+// Totals / summary row (gold beige)
+function xlTotals(ws, rowNum, values, nc) {
+  for (let c=1; c<=nc; c++) {
+    const cell     = ws.getCell(rowNum, c)
+    cell.value     = values[c-1] ?? ''
+    cell.fill      = xlFill(C.totalBg)
+    cell.font      = xlFont(C.totalText, 10, true)
+    cell.alignment = xlAln(typeof values[c-1]==='number'?'center':'left', 'middle')
+    cell.border    = xlBdr(C.gold)
+  }
+  ws.getRow(rowNum).height = 22
+}
+
+// ── Load ExcelJS from CDN (cached) ──
+async function xlLoad() {
+  if (window.__EXCELJS__) return window.__EXCELJS__
+  await new Promise((res, rej) => {
+    const s = document.createElement('script')
+    s.src     = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js'
+    s.onload  = res
+    s.onerror = rej
+    document.head.appendChild(s)
+  })
+  window.__EXCELJS__ = window.ExcelJS
+  return window.__EXCELJS__
+}
+
+// ── Trigger browser download ──
+async function xlSave(wb, filename) {
+  const buf  = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buf], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url  = URL.createObjectURL(blob)
+  const a    = Object.assign(document.createElement('a'), { href:url, download:filename })
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+// ════════════════════════════════
+// SHEET 1 — SUMMARY DASHBOARD
+// ════════════════════════════════
+function xlBuildSummary(wb, ExcelJS, records, items) {
+  const ws = wb.addWorksheet('Summary', { pageSetup:{ orientation:'portrait', fitToPage:true } })
+  ws.columns = [
+    { width:5 }, { width:32 }, { width:16 }, { width:16 }, { width:18 }, { width:18 }
+  ]
+  const NC = 6
+
+  // ── Banner ──
+  xlTitle(ws, 1, NC, '  PPE DISTRIBUTION — SUMMARY REPORT')
+  xlTitle(ws, 2, NC, new Date().toLocaleString('en-PH',{ dateStyle:'full', timeStyle:'short' }), C.brown, C.white, 10)
+  ws.getRow(2).height = 18
+  xlGoldBar(ws, 3, NC)
+
+  const allE     = records.flatMap(r => r.entries || [])
+  const totalQty = allE.reduce((s,e) => s+(Number(e.qty)||1), 0)
+  const uniqueW  = new Set(allE.map(e => (e.name||'').trim().toLowerCase())).size
+
+  // ── KPIs ──
+  let r = 4
+  xlSection(ws, r, NC, '  KEY METRICS'); r++
+  xlHeaders(ws, r, ['', 'Metric', 'Value', '', '', '']); r++
+
+  const kpis = [
+    ['Total Issuances',       allE.length],
+    ['Total Items Issued',    totalQty],
+    ['Unique Workers',        uniqueW],
+    ['Distribution Records',  records.length],
+    ['PPE Types Tracked',     items.length],
+  ]
+  kpis.forEach(([label, val], i) => {
+    const alt = i % 2 === 0
+    // # col
+    const c1 = ws.getCell(r,1); c1.value=''; c1.fill=xlFill(alt?C.beige:C.cream); c1.border=xlBdr()
+    // Label col
+    const c2 = ws.getCell(r,2)
+    c2.value = label; c2.fill = xlFill(alt?C.beige:C.cream)
+    c2.font = xlFont(C.espresso, 11, true); c2.alignment = xlAln('left','middle'); c2.border = xlBdr()
+    // Value col (spans rest)
+    ws.mergeCells(r, 3, r, NC)
+    const c3 = ws.getCell(r,3)
+    c3.value = val; c3.fill = xlFill(C.goldLight)
+    c3.font = xlFont(C.espresso, 16, true); c3.alignment = xlAln('center','middle'); c3.border = xlBdr(C.gold)
+    ws.getRow(r).height = 26; r++
+  })
+
+  r++
+  // ── PPE Type Breakdown ──
+  xlSection(ws, r, NC, '  BREAKDOWN BY PPE TYPE'); r++
+  xlHeaders(ws, r, ['#', 'PPE Type', 'Records', 'Workers', 'Items Issued', 'Stock Left']); r++
+
+  items.forEach((item, i) => {
+    const recs    = records.filter(rec => rec.ppeItemId === item.id)
+    const entries = recs.flatMap(rec => rec.entries || [])
+    const qty     = entries.reduce((s,e) => s+(Number(e.qty)||1), 0)
+    const workers = new Set(entries.map(e => (e.name||'').trim().toLowerCase())).size
+    const stock   = item.stock || 0
+    const stkFill = stock===0 ? C.redLight : stock<=10 ? C.orangeLight : C.greenLight
+    const stkFont = stock===0 ? C.red      : stock<=10 ? C.orange      : C.green
+    xlDataRow(ws, r, [i+1, item.name, recs.length, workers, qty, stock], i%2===0, [
+      { align:'center', font:C.muted },
+      { bold:true, font:C.espresso },
+      { align:'center' },
+      { align:'center' },
+      { align:'center', bold:true, font:C.choco },
+      { align:'center', bold:true, font:stkFont, fill:stkFill },
+    ]); r++
+  })
+
+  const totStock = items.reduce((s,i) => s+(Number(i.stock)||0), 0)
+  xlTotals(ws, r, ['', 'GRAND TOTAL', records.length, uniqueW, totalQty, totStock], NC); r++
+
+  r++
+  // ── Top Workers ──
+  xlSection(ws, r, NC, '  TOP WORKERS BY ISSUANCE COUNT'); r++
+  xlHeaders(ws, r, ['#', 'Full Name', 'Designation', 'Count', 'PPE Types Received', '']); r++
+
+  const wmap = {}
+  for (const rec of records)
+    for (const e of (rec.entries||[])) {
+      const k = (e.name||'').trim().toLowerCase(); if (!k) continue
+      if (!wmap[k]) wmap[k] = { name:e.name, desig:e.designation, count:0, types:new Set() }
+      wmap[k].count++; wmap[k].types.add(rec.ppeItemName)
+    }
+  Object.values(wmap).sort((a,b)=>b.count-a.count).slice(0,15).forEach((w,i) => {
+    xlDataRow(ws, r, [i+1, w.name, w.desig||'', w.count, [...w.types].join(', '), ''], i%2===0, [
+      { align:'center', font:C.muted },
+      { bold:true, font:C.espresso },
+      { font:C.muted },
+      { align:'center', bold:true, font:C.choco, fill: i%2===0?C.goldLight:C.parchment },
+      { font:C.brown },
+      {},
+    ]); r++
+  })
+
+  return ws
+}
+
+// ════════════════════════════════
+// SHEET 2 — ALL RECORDS (flat)
+// ════════════════════════════════
+function xlBuildAllRecords(wb, ExcelJS, records) {
+  const ws = wb.addWorksheet('All Records', {
+    views:[{ state:'frozen', ySplit:4 }],
+    pageSetup:{ orientation:'landscape', fitToPage:true, fitToWidth:1 }
+  })
+  ws.columns = [
+    { width:5 }, { width:30 }, { width:22 }, { width:22 },
+    { width:8  }, { width:14 }, { width:10 }, { width:32 }, { width:22 }
+  ]
+  const NC = 9
+
+  xlTitle(ws, 1, NC, '  PPE DISTRIBUTION — ALL RECORDS')
+  xlTitle(ws, 2, NC, `Exported: ${new Date().toLocaleString()}`, C.brown, C.white, 10)
+  ws.getRow(2).height = 18
+  xlGoldBar(ws, 3, NC)
+  xlHeaders(ws, 4, ['#','Full Name','Designation','PPE Type','QTY','Date','Time','Remarks','Saved At'])
+
+  const sorted = [...records].sort((a,b) => new Date(b.savedAt)-new Date(a.savedAt))
+  let row=5, seq=1
+
+  for (const rec of sorted) {
+    for (const e of (rec.entries||[])) {
+      xlDataRow(ws, row, [
+        seq, e.name||'', e.designation||'', rec.ppeItemName||'',
+        e.qty||1, e.date||'', e.time||'', e.remarks||'',
+        rec.savedAt ? new Date(rec.savedAt).toLocaleString() : ''
+      ], seq%2===0, [
+        { align:'center', font:C.muted },
+        { bold:true, font:C.espresso },
+        { font:C.muted },
+        { bold:true, font:C.choco },
+        { align:'center', bold:true },
+        { align:'center', font:C.muted },
+        { align:'center', font:C.muted },
+        { font:C.muted },
+        { align:'center', font:C.muted, fill: seq%2===0?C.goldLight:C.beige },
+      ])
+      seq++; row++
+    }
+  }
+
+  const totalQty = sorted.reduce((s,r)=>s+(r.entries||[]).reduce((ss,e)=>ss+(Number(e.qty)||1),0),0)
+  xlTotals(ws, row, ['','TOTAL ENTRIES',seq-1,'',totalQty,'','','',''], NC)
+
+  return ws
+}
+
+// ════════════════════════════════
+// SHEET 3 — BY PPE TYPE
+// ════════════════════════════════
+function xlBuildByType(wb, ExcelJS, records, items) {
+  const ws = wb.addWorksheet('By PPE Type', {
+    views:[{ state:'frozen', ySplit:3 }],
+    pageSetup:{ orientation:'landscape', fitToPage:true, fitToWidth:1 }
+  })
+  ws.columns = [
+    { width:5 }, { width:30 }, { width:22 },
+    { width:8 }, { width:14 }, { width:10 }, { width:32 }
+  ]
+  const NC = 7
+
+  xlTitle(ws, 1, NC, '  PPE DISTRIBUTION — BY TYPE')
+  xlTitle(ws, 2, NC, `Exported: ${new Date().toLocaleString()}`, C.brown, C.white, 10)
+  ws.getRow(2).height = 18
+
+  let row = 3
+
+  for (const item of items) {
+    const recs    = records.filter(r => r.ppeItemId === item.id)
+    const entries = recs.flatMap(r => r.entries||[])
+    const totalQty= entries.reduce((s,e) => s+(Number(e.qty)||1), 0)
+
+    xlSection(ws, row, NC, `  ${item.name}   ·   ${entries.length} issuance(s)   ·   ${totalQty} items`); row++
+
+    if (!entries.length) {
+      ws.mergeCells(row,1,row,NC)
+      const cell = ws.getCell(row,1)
+      cell.value = 'No records yet for this PPE type.'
+      cell.fill = xlFill(C.cream); cell.font = xlFont(C.muted,10,false,true)
+      cell.alignment = xlAln('center','middle')
+      ws.getRow(row).height = 18; row++; continue
+    }
+
+    xlHeaders(ws, row, ['#','Full Name','Designation','QTY','Date','Time','Remarks'], C.tan, C.espresso); row++
+
+    entries.forEach((e, i) => {
+      xlDataRow(ws, row, [
+        i+1, e.name||'', e.designation||'', e.qty||1, e.date||'', e.time||'', e.remarks||''
+      ], i%2===0, [
+        { align:'center', font:C.muted },
+        { bold:true, font:C.espresso },
+        { font:C.muted },
+        { align:'center', bold:true },
+        { align:'center', font:C.muted },
+        { align:'center', font:C.muted },
+        { font:C.muted },
+      ]); row++
+    })
+
+    xlTotals(ws, row, ['','Subtotal',entries.length,totalQty,'','',''], NC); row++
+
+    // spacer between PPE types
+    for (let c=1;c<=NC;c++) { const cell=ws.getCell(row,c); cell.fill=xlFill(C.goldLight); cell.border=xlBdr(C.goldLight) }
+    ws.getRow(row).height = 6; row++
+  }
+
+  return ws
+}
+
+// ════════════════════════════════
+// SHEET — SINGLE RECORD
+// ════════════════════════════════
+function xlBuildSingleRecord(wb, ExcelJS, record) {
+  const safeName = (record.ppeItemName||'Record').replace(/[^a-zA-Z0-9 ]/g,'').slice(0,25)||'Record'
+  const ws = wb.addWorksheet(safeName, {
+    views:[{ state:'frozen', ySplit:4 }],
+    pageSetup:{ orientation:'landscape', fitToPage:true }
+  })
+  ws.columns = [
+    { width:5 }, { width:30 }, { width:22 },
+    { width:8 }, { width:14 }, { width:10 }, { width:32 }
+  ]
+  const NC = 7
+  const entries  = record.entries || []
+  const totalQty = entries.reduce((s,e) => s+(Number(e.qty)||1), 0)
+
+  xlTitle(ws, 1, NC, `  ${(record.ppeItemName||'PPE').toUpperCase()} — DISTRIBUTION RECORD`)
+  xlTitle(ws, 2, NC,
+    `Saved: ${record.savedAt ? new Date(record.savedAt).toLocaleString() : '—'}   ·   ${entries.length} worker(s)   ·   ${totalQty} items`,
+    C.brown, C.white, 10)
+  ws.getRow(2).height = 18
+  xlGoldBar(ws, 3, NC)
+  xlHeaders(ws, 4, ['#','Full Name','Designation','QTY','Date','Time','Remarks'])
+
+  let row = 5
+  entries.forEach((e, i) => {
+    xlDataRow(ws, row, [
+      i+1, e.name||'', e.designation||'', e.qty||1, e.date||'', e.time||'', e.remarks||''
+    ], i%2===0, [
+      { align:'center', font:C.muted },
+      { bold:true, font:C.espresso },
+      { font:C.muted },
+      { align:'center', bold:true },
+      { align:'center', font:C.muted },
+      { align:'center', font:C.muted },
+      { font:C.muted },
+    ]); row++
+  })
+
+  xlTotals(ws, row, ['','TOTAL',entries.length,totalQty,'','',''], NC)
+
+  return ws
+}
+
+// ── Public export handlers ──
+
+async function handleExportAll() {
+  try {
+    const ExcelJS = await xlLoad()
+    const wb = new ExcelJS.Workbook()
+    wb.creator = 'PPE System'; wb.created = new Date()
+    xlBuildSummary(wb, ExcelJS, sortedPPERecords.value, ppeItems.value)
+    xlBuildAllRecords(wb, ExcelJS, sortedPPERecords.value)
+    xlBuildByType(wb, ExcelJS, sortedPPERecords.value, ppeItems.value)
+    await xlSave(wb, `PPE_Distribution_${new Date().toISOString().slice(0,10)}.xlsx`)
+    showToast('Exported to Excel ✓')
+  } catch(e) { console.error(e); showToast('Export failed — check console') }
+}
+
+async function handleExportSingle(record) {
+  try {
+    const ExcelJS = await xlLoad()
+    const wb = new ExcelJS.Workbook()
+    wb.creator = 'PPE System'
+    xlBuildSingleRecord(wb, ExcelJS, record)
+    const name = (record.ppeItemName||'Record').replace(/[^a-zA-Z0-9]/g,'_').slice(0,20)
+    await xlSave(wb, `PPE_${name}_${new Date().toISOString().slice(0,10)}.xlsx`)
+    showToast('Record exported ✓')
+  } catch(e) { console.error(e); showToast('Export failed — check console') }
+}
+
+async function handleExportFlat() {
+  try {
+    const ExcelJS = await xlLoad()
+    const wb = new ExcelJS.Workbook()
+    wb.creator = 'PPE System'
+    const fakeRecs = filteredFlatEntries.value.map(e => ({
+      ppeItemId:e.ppeItemId, ppeItemName:e.ppeItemName, savedAt:e.savedAt, entries:[e]
+    }))
+    xlBuildAllRecords(wb, ExcelJS, fakeRecs)
+    await xlSave(wb, `PPE_AllRecords_${new Date().toISOString().slice(0,10)}.xlsx`)
+    showToast('Exported to Excel ✓')
+  } catch(e) { console.error(e); showToast('Export failed — check console') }
+}
+
 // ── Search ──
-const searchQuery  = ref('')
+const searchQuery   = ref('')
 const searchResults = ref([])
 
 function doSearch() {
@@ -1112,6 +1853,46 @@ function ppeTotalQty(ppeItemId) {
     }
   }
   return sum
+}
+
+// Initial stock = current stock + total qty already issued
+function ppeInitialStock(ppeItemId) {
+  const item = ppeItems.value.find(i => i.id === ppeItemId)
+  const current = Number(item?.stock) || 0
+  return current + ppeTotalQty(ppeItemId)
+}
+
+function stockPercent(item) {
+  const initial = ppeInitialStock(item.id)
+  if (!initial) return 0
+  return Math.round(((Number(item.stock) || 0) / initial) * 100)
+}
+
+function stockColor(item) {
+  const s = Number(item.stock) || 0
+  if (s === 0)  return '#e05c5c'
+  if (s <= 10)  return '#e8a030'
+  return '#4a9a6a'
+}
+
+// ── Stock edit modal ──
+const showStockModal  = ref(false)
+const stockEditItem   = ref(null)
+const stockEditValue  = ref(0)
+
+function openStockEdit(item) {
+  stockEditItem.value  = item
+  stockEditValue.value = Number(item.stock) || 0
+  showStockModal.value = true
+}
+
+async function handleStockSave() {
+  if (!stockEditItem.value) return
+  const updated = { ...stockEditItem.value, stock: Number(stockEditValue.value) || 0 }
+  await updatePPEItem(updated)
+  showStockModal.value = false
+  stockEditItem.value  = null
+  showToast('Stock updated')
 }
 
 function ppeRecentWorkers(ppeItemId) {
@@ -1383,7 +2164,7 @@ function showToast(msg) {
 /* ── PPE Grid ── */
 .ppe-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, 192px);
   gap: 16px;
 }
 
@@ -1391,16 +2172,17 @@ function showToast(msg) {
   background: #ffffff;
   border: 1.5px solid #ddd0bc;
   border-radius: 16px;
-  padding: 28px 20px 24px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
+  align-items: stretch;
+  cursor: default;
   font-family: 'Nunito', sans-serif;
   transition: all 0.22s;
   position: relative;
   overflow: hidden;
+  width: 192px;
+  height: 192px;
 }
 .ppe-item-card::before {
   content: '';
@@ -1410,27 +2192,75 @@ function showToast(msg) {
   opacity: 0;
   transition: opacity 0.2s;
   border-radius: 14px;
+  pointer-events: none;
 }
 .ppe-item-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-3px);
   border-color: var(--item-color, #8a6a4a);
   box-shadow: 0 8px 24px rgba(0,0,0,0.1);
 }
-.ppe-item-card:hover::before { opacity: 0.06; }
+.ppe-item-card:hover::before { opacity: 0.04; }
+
+/* Clickable body */
+.ppe-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 10px 10px;
+  cursor: pointer;
+  flex: 1;
+  position: relative;
+}
+.ppe-card-body:hover .ppe-item-icon { transform: scale(1.08); }
+
+/* Action row at bottom of card */
+.ppe-card-actions {
+  display: flex;
+  border-top: 1.5px solid #f0e8dc;
+  position: relative;
+}
+.ppe-act-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 0;
+  font-size: 10px;
+  font-weight: 800;
+  font-family: 'Nunito', sans-serif;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.ppe-act-btn svg { width: 11px; height: 11px; }
+.ppe-act-btn + .ppe-act-btn {
+  border-left: 1.5px solid #f0e8dc;
+}
+.ppe-act-edit  { color: #6a8ab0; }
+.ppe-act-edit:hover  { background: #eef3fa; color: #3a6a9a; }
+.ppe-act-delete { color: #c07070; }
+.ppe-act-delete:hover { background: #fdeaea; color: #c0392b; }
 
 .ppe-item-icon {
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--item-color, #8a6a4a);
   position: relative;
+  transition: transform 0.2s;
 }
-.ppe-item-icon svg { width: 38px; height: 38px; }
+.ppe-item-icon svg { width: 36px; height: 36px; }
 .ppe-item-name {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 800;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   color: #3a2a1a;
@@ -1438,7 +2268,7 @@ function showToast(msg) {
   position: relative;
 }
 
-.ppe-item-add { border-style: dashed; }
+.ppe-item-add { border-style: dashed; cursor: pointer; }
 
 /* ══════════════════════════
    ALL RECORDS VIEW
@@ -1851,14 +2681,34 @@ function showToast(msg) {
   border: 1.5px solid rgba(184,50,50,0.25);
 }
 .btn-danger:hover { background: rgba(184,50,50,0.14); }
+
+/* ── Excel Export Button ── */
+.btn-excel {
+  background: linear-gradient(135deg, #1e6e3a 0%, #217346 100%);
+  color: #fff;
+  border: 1.5px solid #1a5c32;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 6px rgba(33,115,70,0.18);
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+.btn-excel:hover:not(:disabled) {
+  background: linear-gradient(135deg, #185a30 0%, #1c5e3c 100%);
+  box-shadow: 0 4px 12px rgba(33,115,70,0.28);
+  transform: translateY(-1px);
+}
+.btn-excel:active:not(:disabled) { transform: translateY(0); }
+.btn-excel:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
 .btn-sm { padding: 5px 14px; font-size: 11px; }
 
 /* ── History ── */
 .history-top {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   margin-bottom: 24px;
+  flex-wrap: wrap;
 }
 
 .search-wrap {
@@ -2239,6 +3089,112 @@ function showToast(msg) {
   width: 16px;
   text-align: center;
   flex-shrink: 0;
+}
+
+/* ── PPE Stock badge on card ── */
+.ppe-stock-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 4px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  font-size: 10px;
+  font-weight: 800;
+  font-family: 'DM Mono', monospace;
+  border: 1.5px solid transparent;
+  transition: all 0.2s;
+  pointer-events: none;
+}
+.ppe-stock-badge svg { width: 9px; height: 9px; }
+.stock-ok   { background: #e6f5ec; color: #2d7a50; border-color: #b8dfc9; }
+.stock-low  { background: #fff3e0; color: #a05a00; border-color: #ffd080; }
+.stock-none { background: #fdeaea; color: #c0392b; border-color: #f5b7b1; }
+
+
+.ppe-out-of-stock { opacity: 0.7; }
+
+/* ── Analysis card stock section ── */
+.ac-stock-section { padding: 4px 0 8px; }
+.ac-stock-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.ac-stock-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #a08060;
+}
+.ac-stock-nums { font-size: 13px; font-weight: 700; }
+.ac-stock-sep  { color: #bba; font-weight: 400; font-size: 12px; }
+.ac-stock-track {
+  height: 8px;
+  background: #f0e8dc;
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.ac-stock-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.ac-stock-status {
+  font-size: 10px;
+  font-weight: 700;
+  text-align: right;
+}
+.ac-divider {
+  height: 1px;
+  background: #f0e8dc;
+  margin: 10px 0;
+}
+
+/* ── Modal sub-text ── */
+.modal-sub {
+  font-size: 13px;
+  color: #888;
+  margin: -8px 0 20px;
+  line-height: 1.5;
+}
+.form-hint {
+  font-size: 11px;
+  color: #aaa;
+  margin-top: 5px;
+}
+
+/* ── History entry action buttons ── */
+.entry-act-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.entry-act-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1.5px solid;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.entry-act-edit   { color: #6a8ab0; border-color: #c0d0e0; }
+.entry-act-edit:hover   { background: #eef3fa; color: #3a6a9a; border-color: #3a6a9a; }
+.entry-act-delete { color: #c07070; border-color: #f0c0c0; }
+.entry-act-delete:hover { background: #fdeaea; color: #c0392b; border-color: #c0392b; }
+
+/* ── Modal form row (side-by-side fields) ── */
+.form-row {
+  display: flex;
+  gap: 16px;
 }
 
 /* ── QTY pill ── */

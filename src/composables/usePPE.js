@@ -21,12 +21,12 @@ const PPE_RECORDS_COL = 'ppe_records'
 
 // ── Default PPE types ──
 const DEFAULT_PPE_ITEMS = [
-  { id: 'ppe-1', name: 'Hard Hat',     icon: '🪖', color: '#e8b84b' },
-  { id: 'ppe-2', name: 'Gloves',       icon: '🧤', color: '#a07850' },
-  { id: 'ppe-3', name: 'Safety Vest',  icon: '🦺', color: '#e87d2a' },
-  { id: 'ppe-4', name: 'Safety Shoes', icon: '👟', color: '#5a7a9a' },
-  { id: 'ppe-5', name: 'Welding Mask', icon: '😷', color: '#4a6a4a' },
-  { id: 'ppe-6', name: 'Harness',      icon: '🔗', color: '#8a4a8a' },
+  { id: 'ppe-1', name: 'Hard Hat',     icon: '🪖', color: '#e8b84b', stock: 0 },
+  { id: 'ppe-2', name: 'Gloves',       icon: '🧤', color: '#a07850', stock: 0 },
+  { id: 'ppe-3', name: 'Safety Vest',  icon: '🦺', color: '#e87d2a', stock: 0 },
+  { id: 'ppe-4', name: 'Safety Shoes', icon: '👟', color: '#5a7a9a', stock: 0 },
+  { id: 'ppe-5', name: 'Welding Mask', icon: '😷', color: '#4a6a4a', stock: 0 },
+  { id: 'ppe-6', name: 'Harness',      icon: '🔗', color: '#8a4a8a', stock: 0 },
 ]
 
 // ── State ──
@@ -109,6 +109,13 @@ async function writePPERecord(record) {
   }
 }
 
+async function updatePPERecord(record) {
+  const idx = ppeRecords.value.findIndex(r => r.id === record.id)
+  if (idx !== -1) ppeRecords.value[idx] = { ...record }
+  savePPERecordsLocal()
+  await writePPERecord(record)
+}
+
 async function deletePPERecord(id) {
   ppeRecords.value = ppeRecords.value.filter(r => r.id !== id)
   savePPERecordsLocal()
@@ -128,12 +135,13 @@ async function deletePPEItem(id) {
 
 // ── Public API ──
 
-async function addPPEItem({ name, icon, color }) {
+async function addPPEItem({ name, icon, color, stock }) {
   const item = {
     id: 'ppe-' + Date.now(),
     name: name.trim(),
     icon: icon || '🛡️',
-    color: color || '#8a6a4a'
+    color: color || '#8a6a4a',
+    stock: Number(stock) || 0
   }
   ppeItems.value.push(item)
   savePPEItemsLocal()
@@ -173,6 +181,17 @@ async function savePPEDistribution({ ppeItemId, entries }) {
     ppeRecords.value.push(record)
   }
   savePPERecordsLocal()
+
+  // Deduct stock from the PPE item
+  const totalQtyUsed = entries.reduce((sum, e) => sum + (Number(e.qty) || 1), 0)
+  const itemIdx = ppeItems.value.findIndex(i => i.id === ppeItemId)
+  if (itemIdx !== -1) {
+    const newStock = Math.max(0, (Number(ppeItems.value[itemIdx].stock) || 0) - totalQtyUsed)
+    ppeItems.value[itemIdx] = { ...ppeItems.value[itemIdx], stock: newStock }
+    savePPEItemsLocal()
+    writePPEItem(ppeItems.value[itemIdx])
+  }
+
   // Then attempt Firestore write (fire and forget — onSnapshot will sync if online)
   writePPERecord(record)
   return record
@@ -225,6 +244,7 @@ export function usePPE() {
     updatePPEItem,
     savePPEDistribution,
     deletePPEDistribution,
+    updatePPERecord,
     searchWorker,
   }
 }

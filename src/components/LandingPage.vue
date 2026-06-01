@@ -16,8 +16,8 @@
           </svg>
         </div>
         <div class="header-text">
-          <h1>CSU Operations Hub</h1>
-          <p>Civil Service Unit — Integrated Management Systems</p>
+          <h1>EQUIPMENT TRACKER</h1>
+          <p>General Services Office</p>
         </div>
       </div>
 
@@ -90,9 +90,7 @@
       </div>
 
       <!-- Footer -->
-      <div class="landing-footer">
-        <span>Civil Service Unit &mdash; Operations Management &copy; {{ new Date().getFullYear() }}</span>
-      </div>
+      
     </div>
   </div>
 </template>
